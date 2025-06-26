@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Juego Babylon.js con Joystick</title>
+    <style>
+        html, body {
+            overflow: hidden;
+            width: 100%;
+            height: 100%;
+            margin: 0;
+            padding: 0;
+        }
+        #renderCanvas {
+            width: 100%;
+            height: 100%;
+            touch-action: none;
+        }
+        #joystick {
+            position: absolute;
+            bottom: 50px;
+            left: 50px;
+            width: 100px;
+            height: 100px;
+            background: rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            touch-action: none;
+        }
+        #joystickKnob {
+            position: absolute;
+            width: 40px;
+            height: 40px;
+            background: rgba(255, 255, 255, 0.7);
+            border-radius: 50%;
+            top: 30px;
+            left: 30px;
+            touch-action: none;
+        }
+    </style>
+    <script src="https://cdn.babylonjs.com/babylon.js"></script>
+    <script src="https://cdn.babylonjs.com/loaders/babylonjs.loaders.min.js"></script>
+    <script src="https://cdn.babylonjs.com/gui/babylon.gui.min.js"></script>
+</head>
+<body>
+    <canvas id="renderCanvas"></canvas>
+    <div id="joystick">
+        <div id="joystickKnob"></div>
+    </div>
+    <script>
+        // Inicializar el motor Babylon.js
+        const canvas = document.getElementById("renderCanvas");
+        const engine = new BABYLON.Engine(canvas, true);
+        
+        // Crear la escena
+        const createScene = async function () {
+            const scene = new BABYLON.Scene(engine);
+            scene.gravity = new BABYLON.Vector3(0, -0.9, 0);
+            scene.collisionsEnabled = true;
+            
+            // Configurar cámara
+            const camera = new BABYLON.UniversalCamera("camera", new BABYLON.Vector3(0, 5, -10), scene);
+            camera.setTarget(BABYLON.Vector3.Zero());
+            camera.attachControl(canvas, true);
+            camera.applyGravity = true;
+            camera.ellipsoid = new BABYLON.Vector3(1, 1.5, 1);
+            camera.checkCollisions = true;
+            camera.minZ = 0.1;
+            camera.speed = 0.3;
+            camera.angularSensibility = 3000;
+            
+            // Configurar luz
+            const light = new BABYLON.HemisphericLight("light", new BABYLON.Vector3(0, 1, 0), scene);
+            light.intensity = 0.7;
+            
+            // Cargar el mapa 3D
+            let ground;
+            BABYLON.SceneLoader.ImportMesh("", "", "mapa.glb", scene, function (meshes) {
+                // Asegurarse de que todos los meshes tengan colisiones
+                meshes.forEach(mesh => {
+                    if (mesh.name.toLowerCase().includes("ground") || mesh.name.toLowerCase().includes("terrain")) {
+                        ground = mesh;
+                    }
+                    mesh.checkCollisions = true;
+                });
+                
+                // Si no encontramos un ground específico, usar el primer mesh como terreno
+                if (!ground && meshes.length > 0) {
+                    ground = meshes[0];
+                }
+                
+                // Configurar colisiones para el terreno
+                if (ground) {
+                    ground.checkCollisions = true;
+                    ground.receiveShadows = true;
+                    
+                    // Para mapas no planos, necesitamos usar un impostor de malla para colisiones precisas
+                    ground.physicsImpostor = new BABYLON.PhysicsImpostor(
+                        ground, 
+                        BABYLON.PhysicsImpostor.MeshImpostor, 
+                        { mass: 0, restitution: 0.1 }, 
+                        scene
+                    );
+                }
+            });
+            
+            // Crear jugador (capsula)
+            const player = BABYLON.MeshBuilder.CreateCapsule("player", {
+                height: 1.8,
+                radius: 0.4,
+                subdivisions: 8,
+                tessellation: 16
+            }, scene);
+            player.position = new BABYLON.Vector3(0, 3, 0);
+            
+            // Configurar física y colisiones para el jugador
+            player.physicsImpostor = new BABYLON.PhysicsImpostor(
+                player, 
+                BABYLON.PhysicsImpostor.CapsuleImpostor, 
+                { mass: 1, friction: 0.5, restitution: 0.1 }, 
+                scene
+            );
+            player.checkCollisions = true;
+            player.ellipsoid = new BABYLON.Vector3(0.4, 0.9, 0.4);
+            player.ellipsoidOffset = new BABYLON.Vector3(0, 0.9, 0);
+            
+            // Hacer que la cámara siga al jugador
+            scene.registerBeforeRender(function () {
+                camera.position.x = player.position.x;
+                camera.position.z = player.position.z - 5;
+                camera.position.y = player.position.y + 2;
+                camera.setTarget(new BABYLON.Vector3(player.position.x, player.position.y + 1.5, player.position.z));
+            });
+            
+            // Configurar joystick virtual
+            const joystick = {
+                active: false,
+                origin: { x: 0, y: 0 },
+                position: { x: 0, y: 0 },
+                delta: { x: 0, y: 0 },
+                maxRadius: 40
+            };
+            
+            const joystickElement = document.getElementById("joystick");
+            const joystickKnob = document.getElementById("joystickKnob");
+            
+            // Eventos táctiles
+            joystickElement.addEventListener("touchstart", handleJoystickStart);
+            joystickElement.addEventListener("touchmove", handleJoystickMove);
+            joystickElement.addEventListener("touchend", handleJoystickEnd);
+            
+            // Eventos de ratón (para pruebas en escritorio)
+            joystickElement.addEventListener("mousedown", handleJoystickStart);
+            document.addEventListener("mousemove", handleJoystickMove);
+            document.addEventListener("mouseup", handleJoystickEnd);
+            
+            function handleJoystickStart(e) {
+                e.preventDefault();
+                const rect = joystickElement.getBoundingClientRect();
+                const centerX = rect.left + rect.width / 2;
+                const centerY = rect.top + rect.height / 2;
+                
+                let clientX, clientY;
+                
+                if (e.touches) {
+                    clientX = e.touches[0].clientX;
+                    clientY = e.touches[0].clientY;
+                } else {
+                    clientX = e.clientX;
+                    clientY = e.clientY;
+                }
+                
+                joystick.active = true;
+                joystick.origin = { x: centerX, y: centerY };
+                joystick.position = { x: clientX, y: clientY };
+                updateJoystickVisual();
+            }
+            
+            function handleJoystickMove(e) {
+                if (!joystick.active) return;
+                e.preventDefault();
+                
+                let clientX, clientY;
+                
+                if (e.touches) {
+                    clientX = e.touches[0].clientX;
+                    clientY = e.touches[0].clientY;
+                } else {
+                    clientX = e.clientX;
+                    clientY = e.clientY;
+                }
+                
+                joystick.position = { x: clientX, y: clientY };
+                
+                // Calcular delta
+                joystick.delta = {
+                    x: joystick.position.x - joystick.origin.x,
+                    y: joystick.position.y - joystick.origin.y
+                };
+                
+                // Limitar el joystick al radio máximo
+                const distance = Math.sqrt(joystick.delta.x * joystick.delta.x + joystick.delta.y * joystick.delta.y);
+                if (distance > joystick.maxRadius) {
+                    const ratio = joystick.maxRadius / distance;
+                    joystick.delta.x *= ratio;
+                    joystick.delta.y *= ratio;
+                }
+                
+                updateJoystickVisual();
+            }
+            
+            function handleJoystickEnd(e) {
+                joystick.active = false;
+                joystick.delta = { x: 0, y: 0 };
+                updateJoystickVisual();
+            }
+            
+            function updateJoystickVisual() {
+                if (joystick.active) {
+                    joystickKnob.style.transform = `translate(${joystick.delta.x}px, ${joystick.delta.y}px)`;
+                } else {
+                    joystickKnob.style.transform = "translate(0, 0)";
+                }
+            }
+            
+            // Movimiento del jugador
+            scene.onBeforeRenderObservable.add(() => {
+                if (!player) return;
+                
+                const moveVector = new BABYLON.Vector3(0, 0, 0);
+                
+                if (joystick.active) {
+                    // Normalizar el delta del joystick
+                    const normalizedDelta = {
+                        x: joystick.delta.x / joystick.maxRadius,
+                        y: -joystick.delta.y / joystick.maxRadius // Invertir Y para que hacia arriba sea adelante
+                    };
+                    
+                    // Calcular dirección de movimiento basada en la cámara
+                    const forward = camera.getForwardRay().direction;
+                    const right = camera.getRightRay().direction;
+                    
+                    // Ignorar componente Y para movimiento horizontal
+                    forward.y = 0;
+                    right.y = 0;
+                    forward.normalize();
+                    right.normalize();
+                    
+                    // Combinar direcciones con input del joystick
+                    moveVector.addInPlace(forward.scale(normalizedDelta.y));
+                    moveVector.addInPlace(right.scale(normalizedDelta.x));
+                    
+                    // Normalizar el vector de movimiento para evitar movimiento más rápido en diagonal
+                    if (moveVector.length() > 0) {
+                        moveVector.normalize();
+                        moveVector.scaleInPlace(0.1); // Ajustar velocidad
+                        
+                        // Aplicar movimiento al jugador
+                        player.physicsImpostor.setLinearVelocity(
+                            new BABYLON.Vector3(
+                                moveVector.x * 5,
+                                player.physicsImpostor.getLinearVelocity().y,
+                                moveVector.z * 5
+                            )
+                        );
+                        
+                        // Rotar al jugador en la dirección del movimiento
+                        if (Math.abs(normalizedDelta.x) > 0.1 || Math.abs(normalizedDelta.y) > 0.1) {
+                            const targetAngle = Math.atan2(normalizedDelta.x, normalizedDelta.y);
+                            player.rotation.y = camera.rotation.y + targetAngle;
+                        }
+                    }
+                }
+            });
+            
+            return scene;
+        };
+        
+        // Crear la escena y ejecutar el bucle de renderizado
+        const scenePromise = createScene();
+        
+        engine.runRenderLoop(function () {
+            scenePromise.then(scene => scene.render());
+        });
+        
+        // Manejar redimensionamiento de ventana
+        window.addEventListener("resize", function () {
+            engine.resize();
+        });
+    </script>
+</body>
+</html>
