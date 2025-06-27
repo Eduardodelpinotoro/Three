@@ -113,7 +113,7 @@ function createEnemy(x,z){
 function createItem(x,z,type,mat){
   const m = BABYLON.MeshBuilder.CreatePlane(type,{width:0.3,height:0.3},scene);
   m.billboardMode = BABYLON.Mesh.BILLBOARDMODE_ALL;
-  m.position = new BABYLON.Vector3(x,0.5,z);
+  m.position = new BABYLON.Vector3(x,1.0,z);
   m.material = mat;
   const lt = new BABYLON.PointLight("",m.position,scene);
   items.push({x,z,type});
