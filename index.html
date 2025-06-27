@@ -171,21 +171,27 @@ engine.runRenderLoop(() => {
     .addInPlace(r.scale(joyX * 0.1));
   
   // Update enemies
-  enemies.forEach(e => {
-    if(e.mesh){
-      const dir = camera.position.subtract(e.mesh.position);
-      const dist = dir.length();
-      if(dist<30 && dist>1){
-        const move = dir.normalize().scale(0.06);
-        e.mesh.moveWithCollisions(move);
-      }
-      if(dist<=1){
-        // damage
-        vidaJugador -= 0.5;
+enemies.forEach(e => {
+  if (e.mesh) {
+    const dir = camera.position.subtract(e.mesh.position);
+    const dist = dir.length();
+
+    if (dist < 30 && dist > 1) {
+      const move = dir.normalize().scale(0.06);
+      e.mesh.moveWithCollisions(move);
+    }
+
+    if (dist <= 1) {
+      const now = Date.now();
+      if (!e.lastHitTime || now - e.lastHitTime > 1000) {
+        vidaJugador -= 1;
         actualizarVida();
+        e.lastHitTime = now;
       }
     }
-  });
+  }
+});
+
   
   // Check items
   items.forEach((it,i) => {
