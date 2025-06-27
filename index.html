@@ -1,122 +1,67 @@
 <!DOCTYPE html>
-<html>
+<html lang="es">
 <head>
   <meta charset="UTF-8">
-  <title>Dungeon con Joystick</title>
+  <title>Dungeon Joystick con .glb</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
   <style>
-    html, body {
-      overflow: hidden;
-      width: 100%;
-      height: 100%;
-      margin: 0;
-      padding: 0;
-    }
-    #renderCanvas {
-      width: 100%;
-      height: 100%;
-      touch-action: none;
-    }
+    html, body { margin:0;padding:0;width:100%;height:100%;overflow:hidden;background:#000; }
+    #renderCanvas { width:100%;height:100%; touch-action:none; }
   </style>
   <script src="https://cdn.babylonjs.com/babylon.js"></script>
   <script src="https://cdn.babylonjs.com/loaders/babylonjs.loaders.min.js"></script>
-  <script src="https://cdn.babylonjs.com/gui/babylon.gui.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/nipplejs@0.8.5/dist/nipplejs.min.js"></script>
 </head>
 <body>
   <canvas id="renderCanvas"></canvas>
+  <div id="joyzone" style="position:absolute; bottom:20px; left:20px; width:120px; height:120px; touch-action:none;"></div>
   <script>
     const canvas = document.getElementById("renderCanvas");
     const engine = new BABYLON.Engine(canvas, true);
     const scene = new BABYLON.Scene(engine);
-
-    // Activar colisiones en la escena
     scene.collisionsEnabled = true;
+    scene.gravity = new BABYLON.Vector3(0, -9.81, 0);
 
-    // Crear cámara tipo FPS
-    const camera = new BABYLON.UniversalCamera("FPSCamera", new BABYLON.Vector3(0, 2, 0), scene);
-    camera.attachControl(canvas, true);
+    const camera = new BABYLON.UniversalCamera("cam", new BABYLON.Vector3(0,2,0), scene);
+    camera.attachControl(canvas,true);
     camera.checkCollisions = true;
     camera.applyGravity = true;
-    camera.ellipsoid = new BABYLON.Vector3(1, 2, 1); // Cuerpo de colisión
+    camera.ellipsoid = new BABYLON.Vector3(1,2,1);
+    camera.speed = 0.0; // se moverá SOLO por joystick
 
-    // Luz
-    const light = new BABYLON.HemisphericLight("light", new BABYLON.Vector3(0, 1, 0), scene);
+    new BABYLON.HemisphericLight("light", BABYLON.Axis.Y.scale(1), scene);
 
-    // Joystick
-    const gui = BABYLON.GUI.AdvancedDynamicTexture.CreateFullscreenUI("UI");
-    const joystick = new BABYLON.GUI.Ellipse();
-    joystick.width = "150px";
-    joystick.height = "150px";
-    joystick.color = "white";
-    joystick.thickness = 2;
-    joystick.background = "gray";
-    joystick.left = "-40%";
-    joystick.top = "35%";
-    joystick.horizontalAlignment = BABYLON.GUI.Control.HORIZONTAL_ALIGNMENT_LEFT;
-    joystick.verticalAlignment = BABYLON.GUI.Control.VERTICAL_ALIGNMENT_BOTTOM;
-    gui.addControl(joystick);
-
-    const inner = new BABYLON.GUI.Ellipse();
-    inner.width = "50px";
-    inner.height = "50px";
-    inner.color = "white";
-    inner.thickness = 2;
-    inner.background = "white";
-    joystick.addControl(inner);
-
-    let pointerDown = false;
-    let pointerId = null;
-    let joyX = 0;
-    let joyY = 0;
-
-    joystick.onPointerDownObservable.add(pointer => {
-      pointerDown = true;
-      pointerId = pointer.pointerId;
+    // Cargar GLB
+    BABYLON.SceneLoader.Append("", "mapa.glb", scene, function() {
+      scene.meshes.forEach(m => { m.checkCollisions = true; m.receiveShadows = true; });
     });
 
-    gui.onPointerMoveObservable.add(pointer => {
-      if (pointerDown && pointer.pointerId === pointerId) {
-        const rect = joystick._host._canvas.getBoundingClientRect();
-        const dx = pointer.event.clientX - (rect.left + joystick._currentMeasure.left + joystick._currentMeasure.width / 2);
-        const dy = pointer.event.clientY - (rect.top + joystick._currentMeasure.top + joystick._currentMeasure.height / 2);
-        const max = 75;
-        const dist = Math.sqrt(dx * dx + dy * dy);
-        if (dist > max) {
-          dx *= max / dist;
-          dy *= max / dist;
-        }
-        inner.left = dx + "px";
-        inner.top = dy + "px";
-        joyX = dx / max;
-        joyY = dy / max;
-      }
+    // Joystick con nipple.js
+    const joyzone = document.getElementById("joyzone");
+    const manager = nipplejs.create({
+      zone: joyzone,
+      mode: 'static',
+      position: { left: '60px', bottom: '60px' },
+      color: 'white',
+      size: 120
     });
 
-    gui.onPointerUpObservable.add(() => {
-      pointerDown = false;
-      pointerId = null;
-      inner.left = "0px";
-      inner.top = "0px";
-      joyX = 0;
-      joyY = 0;
+    let joyX = 0, joyY = 0;
+    manager.on('move', (evt, data) => {
+      const rad = data.angle.radian;
+      const dist = data.distance / (120/2);
+      joyX = Math.cos(rad) * dist;
+      joyY = Math.sin(rad) * dist;
     });
+    manager.on('end', () => { joyX = joyY = 0; });
 
-    // Cargar mapa .glb y activar colisiones en sus mallas
-    BABYLON.SceneLoader.Append("", "mapa.glb", scene, function () {
-      scene.meshes.forEach(mesh => {
-        mesh.checkCollisions = true;
-      });
-    });
-
-    // Movimiento con colisiones
     engine.runRenderLoop(() => {
-      const forward = camera.getDirection(BABYLON.Axis.Z).scale(-joyY * 0.5);
-      const right = camera.getDirection(BABYLON.Axis.X).scale(joyX * 0.5);
-      const movement = forward.add(right);
-      camera.moveWithCollisions(movement);
+      const forward = camera.getDirection(BABYLON.Axis.Z).scale(-joyY * 0.1);
+      const right = camera.getDirection(BABYLON.Axis.X).scale(joyX * 0.1);
+      camera.moveWithCollisions(forward.add(right));
       scene.render();
     });
 
-    // Resize automático
     window.addEventListener("resize", () => engine.resize());
   </script>
 </body>
