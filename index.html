@@ -40,14 +40,13 @@
 <script src="https://cdn.babylonjs.com/loaders/babylon.glTF2FileLoader.min.js"></script>
 
 <script>
-// Setup Babylon
 const canvas = document.getElementById("renderCanvas");
 const engine = new BABYLON.Engine(canvas, true);
 const scene = new BABYLON.Scene(engine);
 scene.collisionsEnabled = true;
 scene.gravity = new BABYLON.Vector3(0, -9.81, 0);
 
-// Camera
+// Cámara
 const camera = new BABYLON.FreeCamera("cam", new BABYLON.Vector3(0,1,-5), scene);
 camera.attachControl(canvas, true);
 camera.checkCollisions = true;
@@ -55,15 +54,18 @@ camera.applyGravity = true;
 camera.ellipsoid = new BABYLON.Vector3(1,1,1);
 camera.maxStepHeight = 1;
 
-// Light
+// Luz
 new BABYLON.HemisphericLight("light", new BABYLON.Vector3(0,1,0), scene);
 
-// HUD & Controls
+// Vida y HUD
 let vidaJugador = 5;
 const barraVida = document.getElementById("healthBar");
 function actualizarVida(){
   barraVida.style.width = (vidaJugador * 20) + "%";
-  if(vidaJugador <= 0) alert("Has perdido");
+  if(vidaJugador <= 0){
+    alert("Has perdido");
+    location.reload();
+  }
 }
 actualizarVida();
 
@@ -77,7 +79,7 @@ const joystick = nipplejs.create({
 joystick.on('move', (_, d) => { joyX = d.vector.x; joyY = d.vector.y; });
 joystick.on('end', () => { joyX = 0; joyY = 0; });
 
-// Bullets
+// Disparo
 function crearBala(origen, dir){
   const bala = BABYLON.MeshBuilder.CreateSphere("bala", {diameter:0.3}, scene);
   bala.position = origen.clone();
@@ -91,6 +93,18 @@ function crearBala(origen, dir){
       scene.onBeforeRenderObservable.remove(bala._obs);
       bala.dispose();
     }
+
+    enemies.forEach((e, i) => {
+      if(e.mesh && BABYLON.Vector3.Distance(e.mesh.position, bala.position) < 1){
+        e.health -= 25;
+        if(e.health <= 0){
+          e.mesh.dispose();
+          enemies.splice(i,1);
+        }
+        scene.onBeforeRenderObservable.remove(bala._obs);
+        bala.dispose();
+      }
+    });
   });
   setTimeout(() => {
     scene.onBeforeRenderObservable.remove(bala._obs);
@@ -104,28 +118,26 @@ document.getElementById("btnAttack").onclick = () => {
   setTimeout(()=> atk.dispose(), 200);
 };
 
-// Load map
+// Cargar mapa
 BABYLON.SceneLoader.Append("", "mapa.glb", scene, () => {
   scene.meshes.forEach(m => { m.checkCollisions = true; });
   camera.position = new BABYLON.Vector3(0,1,-5);
   initEntities();
 });
 
-// Entity storage
+// Enemigos, ítems, portal
 const enemies = [], items = [], portal = {mesh:null, active:false}, key = {picked:false};
 
-// Populate enemies/items
 function initEntities(){
-  // Example enemy positions – ajusta a tus datos.
-  const dummy = [ {x:2,z:2}, {x:-3,z:1} ];
+  // Enemigos
+  const dummy = [ {x:2,z:2}, {x:-3,z:1}, {x:5,z:-4} ];
   dummy.forEach(e => enemies.push(createEnemy(e.x,e.z)));
-  
-  // Items
+
+  // Ítems
   const texHealth = new BABYLON.StandardMaterial("",scene);
   texHealth.diffuseTexture = new BABYLON.Texture("https://i.ibb.co/Xr1rftKg/1b452991-913b-4dbe-8f25-43f7108d1d70.png", scene);
   createItem(1,0,"health", texHealth);
-  
-  // Key
+
   const texKey = new BABYLON.StandardMaterial("",scene);
   texKey.diffuseTexture = new BABYLON.Texture("https://i.ibb.co/HpKK2xwJ/1000012289-removebg-preview.png", scene);
   createItem(-1,3,"key", texKey);
@@ -138,7 +150,6 @@ function initEntities(){
   portal.mesh.material=pMat;
 }
 
-// Enemy creation
 function createEnemy(x,z){
   const container = {};
   BABYLON.SceneLoader.ImportMesh("", "", "bat.glb", scene, (meshes) => {
@@ -152,7 +163,6 @@ function createEnemy(x,z){
   return container;
 }
 
-// Item creation
 function createItem(x,z,type, mat){
   const mesh = BABYLON.MeshBuilder.CreatePlane(type,{width:0.3,height:0.3},scene);
   mesh.billboardMode = BABYLON.Mesh.BILLBOARDMODE_ALL;
@@ -161,16 +171,14 @@ function createItem(x,z,type, mat){
   items.push({mesh,type,x,z});
 }
 
-// Game loop
+// Bucle del juego
 engine.runRenderLoop(() => {
-  // Move camera
   const f = camera.getDirection(BABYLON.Axis.Z);
   const r = camera.getDirection(BABYLON.Axis.X);
   camera.cameraDirection = BABYLON.Vector3.Zero()
     .addInPlace(f.scale(joyY * 0.1))
     .addInPlace(r.scale(joyX * 0.1));
   
-  // Update enemies
   enemies.forEach(e => {
     if(e.mesh){
       const dir = camera.position.subtract(e.mesh.position);
@@ -179,34 +187,27 @@ engine.runRenderLoop(() => {
         const move = dir.normalize().scale(0.06);
         e.mesh.moveWithCollisions(move);
       }
-      // Aquí NO se quita vida aunque estén cerca
-      /*
       if(dist<=1){
-        // daño desactivado
-        // vidaJugador -= 0.5;
-        // actualizarVida();
+        vidaJugador -= 0.02;
+        actualizarVida();
       }
-      */
     }
   });
-  
-  // Check items
+
   items.forEach((it,i) => {
     const d = BABYLON.Vector3.Distance(camera.position, it.mesh.position);
     if(d<1){
-      if(it.type==="health") vidaJugador = Math.min(vidaJugador+25,5);
+      if(it.type==="health") vidaJugador = Math.min(vidaJugador+1,5);
       if(it.type==="key") portal.active=true;
       actualizarVida();
       it.mesh.dispose();
       items.splice(i,1);
     }
   });
-  
-  // Portal
+
   if(portal.mesh){
     portal.mesh.rotation.y += 0.01;
-    if(portal.active && BABYLON.Vector3.Distance(camera.position, 
-portal.mesh.position)<1){
+    if(portal.active && BABYLON.Vector3.Distance(camera.position, portal.mesh.position)<1){
       alert("¡Nivel completado!");
       portal.mesh.dispose();
     }
