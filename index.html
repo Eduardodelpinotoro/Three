@@ -38,7 +38,7 @@
   </div>
 </div>
 
-<!-- Librería nipplejs -->
+<!-- Librerías -->
 <script src="https://cdn.jsdelivr.net/npm/nipplejs@0.9.0/dist/nipplejs.min.js"></script>
 <script src="https://cdn.babylonjs.com/babylon.js"></script>
 <script src="https://cdn.babylonjs.com/loaders/babylon.glTF2FileLoader.min.js"></script>
@@ -50,21 +50,22 @@ const scene = new BABYLON.Scene(engine);
 scene.collisionsEnabled = true;
 scene.gravity = new BABYLON.Vector3(0, -9.81, 0);
 
-// Cámara
-const camera = new BABYLON.FreeCamera("cam", new BABYLON.Vector3(0,5,-10), scene);
+// Cámara con colisiones y gravedad
+const camera = new BABYLON.FreeCamera("cam", new BABYLON.Vector3(0, 5, -10), scene);
 camera.attachControl(canvas, true);
 camera.checkCollisions = true;
 camera.applyGravity = true;
-camera.ellipsoid = new BABYLON.Vector3(1, 1, 1);
+// Elipsóide alto para poder subir escaleras
+camera.ellipsoid = new BABYLON.Vector3(1, 2, 1);
 camera.speed = 0.1;
 
 // Luz
-new BABYLON.HemisphericLight("light", new BABYLON.Vector3(0,1,0), scene);
+new BABYLON.HemisphericLight("light", new BABYLON.Vector3(0, 1, 0), scene);
 
-// Variables de movimiento joystick
+// Variables de joystick
 let joyX = 0, joyY = 0;
 
-// Crear joystick con nipplejs
+// Crear joystick nipplejs
 const joystickContainer = document.getElementById('joystick-container');
 const joystick = nipplejs.create({
   zone: joystickContainer,
@@ -77,10 +78,9 @@ const joystick = nipplejs.create({
 joystick.on('move', function(evt, data) {
   if (data && data.vector) {
     joyX = data.vector.x;
-    joyY = data.vector.y; // Invertido para que arriba sea positivo en Y
+    joyY = data.vector.y;
   }
 });
-
 joystick.on('end', function() {
   joyX = 0;
   joyY = 0;
@@ -94,7 +94,7 @@ function actualizarVida(){
   if (vidaJugador <= 0) alert("Has perdido");
 }
 
-// Disparo (solo jugador)
+// Crear bala disparada
 function crearBala(origen, dir){
   const bala = BABYLON.MeshBuilder.CreateSphere("bala", { diameter: 0.3 }, scene);
   bala.position = origen.clone();
@@ -117,7 +117,7 @@ function crearBala(origen, dir){
   }, 2000);
 }
 
-// Botones
+// Botones de ataque
 document.getElementById("btnBow").addEventListener("click", () => {
   crearBala(camera.position.add(camera.getDirection(BABYLON.Axis.Z).scale(2)),
             camera.getDirection(BABYLON.Axis.Z));
@@ -128,7 +128,7 @@ document.getElementById("btnAttack").addEventListener("click", () => {
   setTimeout(() => atk.dispose(), 200);
 });
 
-// Cargar mapa glb
+// Cargar mapa GLB con colisiones activadas
 BABYLON.SceneLoader.Append("", "mapa.glb", scene, function() {
   scene.meshes.forEach(m => {
     m.checkCollisions = true;
@@ -136,19 +136,21 @@ BABYLON.SceneLoader.Append("", "mapa.glb", scene, function() {
   camera.position = new BABYLON.Vector3(0, 5, -10);
 });
 
-// Render loop
+// Loop principal
 engine.runRenderLoop(() => {
-  // Mover cámara con joystick
+  // Movimiento con colisiones
   const forward = camera.getDirection(BABYLON.Axis.Z);
   const right = camera.getDirection(BABYLON.Axis.X);
-  camera.cameraDirection
-    .addInPlace(forward.scale(joyY * 0.05))
-    .addInPlace(right.scale(joyX * 0.05));
+
+  let move = forward.scale(joyY * 0.05).add(right.scale(joyX * 0.05));
+  camera.moveWithCollisions(move);
 
   scene.render();
 });
 
+// Ajustar tamaño al cambiar ventana
 window.addEventListener("resize", () => engine.resize());
 </script>
+
 </body>
 </html>
