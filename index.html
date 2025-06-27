@@ -1,68 +1,154 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-  <meta charset="UTF-8">
-  <title>Dungeon Joystick con .glb</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-  <style>
-    html, body { margin:0;padding:0;width:100%;height:100%;overflow:hidden;background:#000; }
-    #renderCanvas { width:100%;height:100%; touch-action:none; }
-  </style>
-  <script src="https://cdn.babylonjs.com/babylon.js"></script>
-  <script src="https://cdn.babylonjs.com/loaders/babylonjs.loaders.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/nipplejs@0.8.5/dist/nipplejs.min.js"></script>
+<meta charset="UTF-8" />
+<title>Juego con mapa.glb y joystick nipplejs</title>
+<style>
+  html, body { margin:0; width:100%; height:100%; overflow:hidden; background:#000; }
+  #renderCanvas { width:100%; height:100%; display:block; }
+  #joystick-container { position:absolute; bottom:30px; left:30px; width:150px; height:150px; z-index:10; }
+  #hud { position:absolute; top:0; left:0; right:0; bottom:0; pointer-events:none; z-index:20; }
+  #crosshair { position:absolute; width:3px; height:3px; background:red; border-radius:50%;
+               top:50%; left:50%; margin:-1.5px 0 0 -1.5px; }
+  .button { position:absolute; bottom:30px; width:60px; height:60px;
+            background:rgba(255,255,255,0.2); border-radius:50%; color:white;
+            font-size:24px; text-align:center; line-height:60px;
+            user-select:none; pointer-events:auto; }
+  #btnAttack { right:100px; }
+  #btnBow { right:180px; }
+  #hudOverlay { position:absolute; top:10px; left:10px; color:white; font-size:18px; }
+  #healthBarContainer { width:200px; height:20px; background:#444; border:1px solid #fff; margin-top:4px; }
+  #healthBar { height:100%; width:100%; background:#0f0; }
+</style>
 </head>
 <body>
-  <canvas id="renderCanvas"></canvas>
-  <div id="joyzone" style="position:absolute; bottom:20px; left:20px; width:120px; height:120px; touch-action:none;"></div>
-  <script>
-    const canvas = document.getElementById("renderCanvas");
-    const engine = new BABYLON.Engine(canvas, true);
-    const scene = new BABYLON.Scene(engine);
-    scene.collisionsEnabled = true;
-    scene.gravity = new BABYLON.Vector3(0, -9.81, 0);
 
-    const camera = new BABYLON.UniversalCamera("cam", new BABYLON.Vector3(0,2,0), scene);
-    camera.attachControl(canvas,true);
-    camera.checkCollisions = true;
-    camera.applyGravity = true;
-    camera.ellipsoid = new BABYLON.Vector3(1,2,1);
-    camera.speed = 0.0; // se moverá SOLO por joystick
+<canvas id="renderCanvas"></canvas>
 
-    new BABYLON.HemisphericLight("light", BABYLON.Axis.Y.scale(1), scene);
+<!-- Contenedor para nipplejs -->
+<div id="joystick-container"></div>
 
-    // Cargar GLB
-    BABYLON.SceneLoader.Append("", "mapa.glb", scene, function() {
-      scene.meshes.forEach(m => { m.checkCollisions = true; m.receiveShadows = true; });
-    });
+<div id="hud">
+  <div id="crosshair"></div>
+  <div id="btnAttack" class="button">⚔</div>
+  <div id="btnBow" class="button">🎯</div>
+  <div id="hudOverlay">
+    Vida:
+    <div id="healthBarContainer"><div id="healthBar"></div></div>
+  </div>
+</div>
 
-    // Joystick con nipple.js
-    const joyzone = document.getElementById("joyzone");
-    const manager = nipplejs.create({
-      zone: joyzone,
-      mode: 'static',
-      position: { left: '60px', bottom: '60px' },
-      color: 'white',
-      size: 120
-    });
+<!-- Librería nipplejs -->
+<script src="https://cdn.jsdelivr.net/npm/nipplejs@0.9.0/dist/nipplejs.min.js"></script>
+<script src="https://cdn.babylonjs.com/babylon.js"></script>
+<script src="https://cdn.babylonjs.com/loaders/babylon.glTF2FileLoader.min.js"></script>
 
-    let joyX = 0, joyY = 0;
-    manager.on('move', (evt, data) => {
-      const rad = data.angle.radian;
-      const dist = data.distance / (120/2);
-      joyX = Math.cos(rad) * dist;
-      joyY = Math.sin(rad) * dist;
-    });
-    manager.on('end', () => { joyX = joyY = 0; });
+<script>
+const canvas = document.getElementById("renderCanvas");
+const engine = new BABYLON.Engine(canvas, true);
+const scene = new BABYLON.Scene(engine);
+scene.collisionsEnabled = true;
+scene.gravity = new BABYLON.Vector3(0, -9.81, 0);
 
-    engine.runRenderLoop(() => {
-      const forward = camera.getDirection(BABYLON.Axis.Z).scale(-joyY * 0.1);
-      const right = camera.getDirection(BABYLON.Axis.X).scale(joyX * 0.1);
-      camera.moveWithCollisions(forward.add(right));
-      scene.render();
-    });
+// Cámara
+const camera = new BABYLON.FreeCamera("cam", new BABYLON.Vector3(0,5,-10), scene);
+camera.attachControl(canvas, true);
+camera.checkCollisions = true;
+camera.applyGravity = true;
+camera.ellipsoid = new BABYLON.Vector3(1, 2, 1);
+camera.speed = 0.2;
 
-    window.addEventListener("resize", () => engine.resize());
-  </script>
+// Luz
+new BABYLON.HemisphericLight("light", new BABYLON.Vector3(0,1,0), scene);
+
+// Variables de movimiento joystick
+let joyX = 0, joyY = 0;
+
+// Crear joystick con nipplejs
+const joystickContainer = document.getElementById('joystick-container');
+const joystick = nipplejs.create({
+  zone: joystickContainer,
+  mode: 'static',
+  position: { left: '75px', bottom: '75px' },
+  color: 'white',
+  size: 120,
+});
+
+joystick.on('move', function(evt, data) {
+  if (data && data.vector) {
+    joyX = data.vector.x;
+    joyY = -data.vector.y; // Invertido para que arriba sea positivo en Y
+  }
+});
+
+joystick.on('end', function() {
+  joyX = 0;
+  joyY = 0;
+});
+
+// Vida
+let vidaJugador = 5;
+const barraVida = document.getElementById("healthBar");
+function actualizarVida(){
+  barraVida.style.width = (vidaJugador * 20) + "%";
+  if (vidaJugador <= 0) alert("Has perdido");
+}
+
+// Disparo (solo jugador)
+function crearBala(origen, dir){
+  const bala = BABYLON.MeshBuilder.CreateSphere("bala", { diameter: 0.3 }, scene);
+  bala.position = origen.clone();
+  const mat = new BABYLON.StandardMaterial("bMat", scene);
+  mat.emissiveColor = new BABYLON.Color3(0,1,0);
+  bala.material = mat;
+  bala._dir = dir.normalize().scale(4);
+  bala._obs = scene.onBeforeRenderObservable.add(() => {
+    bala.position.addInPlace(bala._dir);
+    if(bala.position.y < -10){
+      scene.onBeforeRenderObservable.remove(bala._obs);
+      bala.dispose();
+    }
+  });
+  setTimeout(() => {
+    if(bala && !bala.isDisposed()){
+      scene.onBeforeRenderObservable.remove(bala._obs);
+      bala.dispose();
+    }
+  }, 2000);
+}
+
+// Botones
+document.getElementById("btnBow").addEventListener("click", () => {
+  crearBala(camera.position.add(camera.getDirection(BABYLON.Axis.Z).scale(2)),
+            camera.getDirection(BABYLON.Axis.Z));
+});
+document.getElementById("btnAttack").addEventListener("click", () => {
+  const atk = BABYLON.MeshBuilder.CreateBox("atk", { size: 1 }, scene);
+  atk.position = camera.position.add(camera.getDirection(BABYLON.Axis.Z).scale(2));
+  setTimeout(() => atk.dispose(), 200);
+});
+
+// Cargar mapa glb
+BABYLON.SceneLoader.Append("", "mapa.glb", scene, function() {
+  scene.meshes.forEach(m => {
+    m.checkCollisions = true;
+  });
+  camera.position = new BABYLON.Vector3(0, 5, -10);
+});
+
+// Render loop
+engine.runRenderLoop(() => {
+  // Mover cámara con joystick
+  const forward = camera.getDirection(BABYLON.Axis.Z);
+  const right = camera.getDirection(BABYLON.Axis.X);
+  camera.cameraDirection
+    .addInPlace(forward.scale(joyY * 0.05))
+    .addInPlace(right.scale(joyX * 0.05));
+
+  scene.render();
+});
+
+window.addEventListener("resize", () => engine.resize());
+</script>
 </body>
 </html>
