@@ -1,25 +1,25 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-<meta charset="UTF-8" />
-<title>Juego con mapa.glb + enemigos/items/portal/llave</title>
-<style>
-  html, body { margin:0; width:100%; height:100%; overflow:hidden; background:#000; }
-  #renderCanvas { width:100%; height:100%; display:block; }
-  #joystick-container { position:absolute; bottom:30px; left:30px; width:150px; height:150px; z-index:10; }
-  #hud { position:absolute; top:0; left:0; right:0; bottom:0; pointer-events:none; z-index:20; }
-  #crosshair { position:absolute; width:3px; height:3px; background:red; border-radius:50%;
-               top:50%; left:50%; margin:-1.5px 0 0 -1.5px; }
-  .button { position:absolute; bottom:30px; width:60px; height:60px;
-            background:rgba(255,255,255,0.2); border-radius:50%; color:white;
-            font-size:24px; text-align:center; line-height:60px;
-            user-select:none; pointer-events:auto; }
-  #btnAttack { right:100px; }
-  #btnBow { right:180px; }
-  #hudOverlay { position:absolute; top:10px; left:10px; color:white; font-size:18px; }
-  #healthBarContainer { width:200px; height:20px; background:#444; border:1px solid #fff; margin-top:4px; }
-  #healthBar { height:100%; width:25%; background:#0f0; transition:width 0.2s; }
-</style>
+  <meta charset="UTF-8" />
+  <title>Juego con mapa.glb + enemigos/items/portal/llave</title>
+  <style>
+    html, body { margin:0; width:100%; height:100%; overflow:hidden; background:#000; }
+    #renderCanvas { width:100%; height:100%; display:block; }
+    #joystick-container { position:absolute; bottom:30px; left:30px; width:150px; height:150px; z-index:10; }
+    #hud { position:absolute; top:0; left:0; right:0; bottom:0; pointer-events:none; z-index:20; }
+    #crosshair { position:absolute; width:3px; height:3px; background:red; border-radius:50%;
+                 top:50%; left:50%; margin:-1.5px 0 0 -1.5px; }
+    .button { position:absolute; bottom:30px; width:60px; height:60px;
+              background:rgba(255,255,255,0.2); border-radius:50%; color:white;
+              font-size:24px; text-align:center; line-height:60px;
+              user-select:none; pointer-events:auto; }
+    #btnAttack { right:100px; }
+    #btnBow { right:180px; }
+    #hudOverlay { position:absolute; top:10px; left:10px; color:white; font-size:18px; }
+    #healthBarContainer { width:200px; height:20px; background:#444; border:1px solid #fff; margin-top:4px; }
+    #healthBar { height:100%; width:25%; background:#0f0; transition:width 0.2s; }
+  </style>
 </head>
 <body>
 
@@ -27,8 +27,11 @@
 <div id="joystick-container"></div>
 <div id="hud">
   <div id="crosshair"></div>
+
+  <!-- Botones integrados -->
   <div id="btnAttack" class="button">⚔</div>
   <div id="btnBow" class="button">🎯</div>
+
   <div id="hudOverlay">
     Vida:
     <div id="healthBarContainer"><div id="healthBar"></div></div>
@@ -40,7 +43,6 @@
 <script src="https://cdn.babylonjs.com/loaders/babylon.glTF2FileLoader.min.js"></script>
 
 <script>
-  // Setup básico de Babylon
   const canvas = document.getElementById("renderCanvas");
   const engine = new BABYLON.Engine(canvas, true);
   const scene = new BABYLON.Scene(engine);
@@ -56,7 +58,6 @@
 
   new BABYLON.HemisphericLight("light", new BABYLON.Vector3(0,1,0), scene);
 
-  // Estado del jugador
   let vidaJugador = 5;
   const barraVida = document.getElementById("healthBar");
   function actualizarVida(){
@@ -68,7 +69,6 @@
   }
   actualizarVida();
 
-  // Joystick
   let joyX = 0, joyY = 0;
   const joystick = nipplejs.create({
     zone: document.getElementById('joystick-container'),
@@ -78,7 +78,6 @@
   joystick.on('move', (_, d) => { joyX = d.vector.x; joyY = d.vector.y; });
   joystick.on('end', () => { joyX = 0; joyY = 0; });
 
-  // Balas
   function crearBala(origen, dir){
     const bala = BABYLON.MeshBuilder.CreateSphere("bala", {diameter:0.3}, scene);
     bala.position = origen.clone();
@@ -94,7 +93,6 @@
         bala.dispose();
       }
 
-      // Impacto contra enemigos
       enemies.forEach((e, i) => {
         if(e.mesh && BABYLON.Vector3.Distance(e.mesh.position, bala.position) < 1){
           e.health -= 25;
@@ -112,6 +110,7 @@
       if (!bala.isDisposed()) bala.dispose();
     }, 2000);
   }
+
   document.getElementById("btnBow").onclick = () => crearBala(
     camera.position.add(camera.getDirection(BABYLON.Axis.Z).scale(2)),
     camera.getDirection(BABYLON.Axis.Z));
@@ -121,7 +120,6 @@
     setTimeout(()=> atk.dispose(), 200);
   };
 
-  // Variables globales del juego
   const enemies = [];
   const items = [];
   const itemMeshes = [];
@@ -129,14 +127,12 @@
   let portalActive = false;
   let hasKey = false;
 
-  // Iniciar el mapa
   BABYLON.SceneLoader.Append("", "mapa.glb", scene, () => {
     scene.meshes.forEach(m => { m.checkCollisions = true; });
     camera.position = new BABYLON.Vector3(1,1,-5);
     initEntities();
   });
 
-  // Crear enemigos, poción, llave y portal
   function initEntities(){
     [{x:2,z:2},{x:-3,z:1},{x:5,z:-4}].forEach(e => enemies.push(createEnemy(e.x,e.z)));
 
@@ -178,7 +174,6 @@
     itemMeshes.push({mesh, light, data:{x,z,type}});
   }
 
-  // Colisión con ítems
   function checkItemCollisions(){
     for(let i = itemMeshes.length-1; i>=0; i--){
       const obj = itemMeshes[i];
@@ -188,7 +183,6 @@
       const dist = Math.sqrt(dx*dx+dz*dz);
       if(dist < 1.5){
         collectItem(obj.data);
-        // quitar de gameState
         const idx = items.findIndex(it =>
           it.x===obj.data.x && it.z===obj.data.z && it.type===obj.data.type);
         if(idx!==-1) items.splice(idx,1);
@@ -213,7 +207,6 @@
     }
   }
 
-  // Bucle principal
   engine.runRenderLoop(() => {
     const f = camera.getDirection(BABYLON.Axis.Z);
     const r = camera.getDirection(BABYLON.Axis.X);
@@ -234,16 +227,16 @@
     if(portalMesh){
       portalMesh.rotation.y += 0.01;
       const d = BABYLON.Vector3.Distance(camera.position, portalMesh.position);
-      if(portalActive && hasKey && d<1){
+      if(portalActive && d < 1.5){
         alert("¡Nivel completado!");
-        window.location.href = "nivel2.html";
+        location.reload();
       }
     }
 
     scene.render();
   });
 
-  window.addEventListener("resize",()=>engine.resize());
+  window.addEventListener("resize", () => engine.resize());
 </script>
 </body>
 </html>
