@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<title>Juego con mapa.glb y balas rápidas</title>
+<style>
+  html, body { margin:0; width:100%; height:100%; overflow:hidden; background:#000; }
+  #renderCanvas { width:100%; height:100%; display:block; }
+  #joystick { position:absolute; bottom:30px; left:30px; width:120px; height:120px;
+              background:rgba(255,255,255,0.15); border-radius:50%; touch-action:none; z-index:10; }
+  #stick { position:absolute; width:40px; height:40px; background:rgba(255,255,255,0.8);
+           border-radius:50%; top:40px; left:40px; }
+  #hud { position:absolute; top:0; left:0; right:0; bottom:0; pointer-events:none; z-index:20; }
+  #crosshair { position:absolute; width:3px; height:3px; background:red; border-radius:50%;
+               top:50%; left:50%; margin:-1.5px 0 0 -1.5px; }
+  .button { position:absolute; bottom:30px; width:60px; height:60px;
+            background:rgba(255,255,255,0.2); border-radius:50%; color:white;
+            font-size:24px; text-align:center; line-height:60px;
+            user-select:none; pointer-events:auto; }
+  #btnAttack { right:100px; }
+  #btnBow { right:180px; }
+  #hudOverlay { position:absolute; top:10px; left:10px; color:white; font-size:18px; }
+  #healthBarContainer { width:200px; height:20px; background:#444; border:1px solid #fff; margin-top:4px; }
+  #healthBar { height:100%; width:100%; background:#0f0; }
+</style>
+</head>
+<body>
+<canvas id="renderCanvas"></canvas>
+<div id="joystick"><div id="stick"></div></div>
+<div id="hud">
+  <div id="crosshair"></div>
+  <div id="btnAttack" class="button">⚔</div>
+  <div id="btnBow" class="button">🎯</div>
+  <div id="hudOverlay">
+    Vida:
+    <div id="healthBarContainer"><div id="healthBar"></div></div>
+  </div>
+</div>
+<script src="https://cdn.babylonjs.com/babylon.js"></script>
+<script src="https://cdn.babylonjs.com/loaders/babylon.glTF2FileLoader.min.js"></script>
+<script>
+const canvas = document.getElementById("renderCanvas");
+const engine = new BABYLON.Engine(canvas, true);
+const scene = new BABYLON.Scene(engine);
+scene.collisionsEnabled = true;
+scene.gravity = new BABYLON.Vector3(0, -9.81, 0);
+
+// Cámara
+const camera = new BABYLON.FreeCamera("cam", new BABYLON.Vector3(0,5,-10), scene);
+camera.attachControl(canvas,true);
+camera.checkCollisions = true;
+camera.applyGravity = true;
+camera.ellipsoid = new BABYLON.Vector3(1,2,1);
+camera.speed = 0.2;
+
+// Luz
+new BABYLON.HemisphericLight("light", new BABYLON.Vector3(0,1,0), scene);
+
+// Joystick
+let joyX=0, joyY=0, dragging=false;
+const stick=document.getElementById("stick"), joystick=document.getElementById("joystick");
+function setStick(x,y){
+  const dx=x-60, dy=y-60, d=Math.hypot(dx,dy), max=40;
+  if(d>max){
+    const a=Math.atan2(dy,dx);
+    joyX=Math.cos(a); joyY=Math.sin(a);
+    stick.style.left=60+joyX*max-20+"px";
+    stick.style.top=60+joyY*max-20+"px";
+  } else {
+    joyX=dx/max; joyY=dy/max;
+    stick.style.left=x-20+"px"; stick.style.top=y-20+"px";
+  }
+}
+function resetStick(){ joyX=0; joyY=0; stick.style.left="40px"; stick.style.top="40px"; }
+joystick.addEventListener("pointerdown",e=>{dragging=true;setStick(e.offsetX,e.offsetY);});
+joystick.addEventListener("pointermove",e=>{if(dragging) setStick(e.offsetX,e.offsetY);});
+joystick.addEventListener("pointerup",resetStick);
+joystick.addEventListener("pointerleave",resetStick);
+
+// Vida
+let vidaJugador=5;
+const barraVida=document.getElementById("healthBar");
+function actualizarVida(){
+  barraVida.style.width = vidaJugador*20 + "%";
+  if(vidaJugador<=0) alert("Has perdido");
+}
+
+// Disparo (solo del jugador)
+function crearBala(origen,dir){
+  const bala = BABYLON.MeshBuilder.CreateSphere("bala",{diameter:0.3},scene);
+  bala.position=origen.clone();
+  const mat = new BABYLON.StandardMaterial("bMat",scene);
+  mat.emissiveColor = new BABYLON.Color3(0,1,0);
+  bala.material=mat;
+  bala._dir = dir.normalize().scale(4);
+  bala._obs = scene.onBeforeRenderObservable.add(()=>{
+    bala.position.addInPlace(bala._dir);
+    if(bala.position.y < -10){
+      scene.onBeforeRenderObservable.remove(bala._obs);
+      bala.dispose();
+    }
+  });
+  setTimeout(()=>{
+    if(bala && !bala.isDisposed()){
+      scene.onBeforeRenderObservable.remove(bala._obs);
+      bala.dispose();
+    }
+  },2000);
+}
+
+// Botones
+document.getElementById("btnBow").addEventListener("click",()=>{
+  crearBala(camera.position.add(camera.getDirection(BABYLON.Axis.Z).scale(2)),
+            camera.getDirection(BABYLON.Axis.Z));
+});
+document.getElementById("btnAttack").addEventListener("click",()=>{
+  const atk = BABYLON.MeshBuilder.CreateBox("atk",{size:1},scene);
+  atk.position = camera.position.add(camera.getDirection(BABYLON.Axis.Z).scale(2));
+  setTimeout(()=>atk.dispose(),200);
+});
+
+// Cargar GLB
+BABYLON.SceneLoader.Append("", "mapa.glb", scene, function() {
+  scene.meshes.forEach(m=>{
+    m.checkCollisions = true;
+  });
+  camera.position = new BABYLON.Vector3(0, 5, -10);
+});
+
+// Render loop
+engine.runRenderLoop(()=>{
+  camera.cameraDirection
+    .addInPlace(camera.getDirection(BABYLON.Axis.Z).scale(-joyY*0.05))
+    .addInPlace(camera.getDirection(BABYLON.Axis.X).scale(joyX*0.05));
+  scene.render();
+});
+window.addEventListener("resize",()=>engine.resize());
+</script>
+</body>
+</html>
