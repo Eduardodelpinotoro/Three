@@ -7,20 +7,17 @@
   html,body{margin:0;overflow:hidden;background:#000}
   #renderCanvas{width:100%;height:100%}
   #joystick-container{position:absolute;bottom:30px;left:30px;width:150px;height:150px;z-index:10}
-  .button{position:absolute;bottom:30px;width:60px;height:60px;background:rgba(255,255,255,0.2);border-radius:50%;color:white;font-size:24px;text-align:center;line-height:60px;pointer-events:auto;}
+  .button{position:absolute;bottom:30px;width:60px;height:60px;background:rgba(255,255,255,0.2);border-radius:50%;pointer-events:auto;}
   #btnAttack{right:100px} #btnMagic{right:180px}
-  #hud{position:absolute;top:0;left:0;right:0;pointer-events:none;z-index:20}
   #healthBarContainer{position:absolute;top:10px;left:10px;width:200px;height:20px;background:#444;border:1px solid #fff}
-  #healthBar{height:100%;width:50%;background:#0f0;transition:width 0.3s}
-  #pickupMsg{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);padding:10px 20px;color:#fff;background:rgba(0,0,0,0.7);border-radius:5px;opacity:0;pointer-events:none;transition:opacity 0.5s;}
+  #healthBar{height:100%;width:50%;background:#0f0;transition:width .3s}
+  #pickupMsg{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);color:#0ff;font-weight:bold;font-size:22px;opacity:0;pointer-events:none;transition:opacity .3s;}
 </style>
 </head>
 <body>
 <canvas id="renderCanvas"></canvas>
 <div id="joystick-container"></div>
-<div id="hud">
-  <div id="healthBarContainer"><div id="healthBar"></div></div>
-</div>
+<div id="healthBarContainer"><div id="healthBar"></div></div>
 <div id="pickupMsg"></div>
 <div class="button" id="btnAttack"></div>
 <div class="button" id="btnMagic"></div>
@@ -31,15 +28,15 @@
 
 <script>
 const canvas = document.getElementById("renderCanvas");
-const engine = new BABYLON.Engine(canvas, true);
+const engine = new BABYLON.Engine(canvas,true);
 const scene = new BABYLON.Scene(engine);
-scene.preventDefaultOnDoubleClick = false; // evitar zoom automático al doble click
-
+scene.preventDefaultOnDoubleClick = false;
 scene.collisionsEnabled = true;
-scene.gravity = new BABYLON.Vector3(0, -9.81, 0);
+scene.gravity = new BABYLON.Vector3(0,-9.81,0);
 
 const camera = new BABYLON.FreeCamera("cam", new BABYLON.Vector3(1,1,-5), scene);
-camera.attachControl(canvas, true);
+camera.attachControl(canvas,true);
+camera.inputs.attached.mousewheel?.detachControl(canvas);
 camera.checkCollisions = true;
 camera.applyGravity = true;
 camera.ellipsoid = new BABYLON.Vector3(1,1,1);
@@ -53,159 +50,148 @@ const pickupMsg = document.getElementById("pickupMsg");
 
 function updateHealthBar(){
   healthBar.style.width = Math.min(vidaJugador,100) + "%";
-  if(vidaJugador <= 0){
-    alert("Has perdido");
-    location.reload();
-  }
+  if(vidaJugador <= 0){ alert("Has perdido"); location.reload(); }
 }
 updateHealthBar();
 
 function showPickup(text){
   pickupMsg.textContent = text;
   pickupMsg.style.opacity = 1;
-  setTimeout(() => pickupMsg.style.opacity = 0, 1500);
+  setTimeout(()=> pickupMsg.style.opacity = 0, 1000);
 }
 
 let joyX=0, joyY=0;
 const joystick = nipplejs.create({
   zone: document.getElementById("joystick-container"),
-  mode: "static",
-  position: { left: "75px", bottom: "75px" },
-  size: 120,
-  color: "white"
+  mode: "static", position:{left:"75px",bottom:"75px"},
+  size:120, color:"white"
 });
-joystick.on("move", (_, d) => { joyX = d.vector.x; joyY = d.vector.y; });
-joystick.on("end", () => { joyX = 0; joyY = 0; });
+joystick.on("move", (_,d)=>{ joyX=d.vector.x; joyY=d.vector.y; });
+joystick.on("end", ()=>{ joyX=0; joyY=0; });
 
-const config = {
-  attackRange: 5,
-  playerAttackDamage: 20,
-  magicCost: 20
-};
+const config = { attackRange:5, playerAttackDamage:20 };
 
-const enemies = [];
-const items = [];
-const itemMeshes = [];
-let portalMesh = null;
-let portalActive = false;
-let hasKey = false;
+const enemies = [], items = [], itemMeshes = [];
+let portalMesh=null, portalActive=false, hasKey=false;
 
-BABYLON.SceneLoader.Append("", "mapa.glb", scene, () => {
-  scene.meshes.forEach(m => m.checkCollisions = true);
+// Carga del mapa
+BABYLON.SceneLoader.Append("", "mapa.glb", scene, ()=>{
+  scene.meshes.forEach(m=>m.checkCollisions=true);
   camera.position = new BABYLON.Vector3(1,1,-5);
   initEntities();
 });
 
 function initEntities(){
-  [{x:2,z:2},{x:-3,z:1},{x:5,z:-4}].forEach(e => enemies.push(createEnemy(e.x, e.z)));
-  
-  const texH = new BABYLON.StandardMaterial("", scene);
-  texH.diffuseTexture = new BABYLON.Texture("https://i.ibb.co/Xr1rftKg/1b452991-913b-4dbe-8f25-43f7108d1d70.png", scene);
-  createItem(1,0,"health", texH);
-  
-  const texK = new BABYLON.StandardMaterial("", scene);
-  texK.diffuseTexture = new BABYLON.Texture("https://i.ibb.co/HpKK2xwJ/1000012289-removebg-preview.png", scene);
-  createItem(-1,3,"key", texK);
-  
-  portalMesh = BABYLON.MeshBuilder.CreateCylinder("portal",{height:0.1, diameter:1.5}, scene);
+  [{x:2,z:2},{x:-3,z:1},{x:5,z:-4}].forEach(e=>enemies.push(createEnemy(e.x,e.z)));
+  const texH = new BABYLON.StandardMaterial("",scene);
+  texH.diffuseTexture = new BABYLON.Texture("https://i.ibb.co/Xr1rftKg/1b452991-913b-4dbe-8f25-43f7108d1d70.png",scene);
+  createItem(1,0,"health",texH);
+  const texK = new BABYLON.StandardMaterial("",scene);
+  texK.diffuseTexture = new BABYLON.Texture("https://i.ibb.co/HpKK2xwJ/1000012289-removebg-preview.png",scene);
+  createItem(-1,3,"key",texK);
+  portalMesh = BABYLON.MeshBuilder.CreateCylinder("portal",{height:0.1,diameter:1.5},scene);
   portalMesh.position = new BABYLON.Vector3(4,0.05,4);
-  const pMat = new BABYLON.StandardMaterial("", scene);
-  pMat.emissiveColor = new BABYLON.Color3(0.5,0,1);
-  pMat.alpha = 0.7;
+  const pMat = new BABYLON.StandardMaterial("",scene);
+  pMat.emissiveColor = new BABYLON.Color3(0.5,0,1);pMat.alpha=0.7;
   portalMesh.material = pMat;
 }
 
-function createEnemy(x, z){
-  const c = {mesh:null, health:50};
-  BABYLON.SceneLoader.ImportMeshAsync(null, "", "bat.glb", scene).then(r => {
-    const m = r.meshes[0];
-    m.position = new BABYLON.Vector3(x,1.8,z);
-    m.scaling = new BABYLON.Vector3(0.07,0.07,0.07);
-    m.checkCollisions = true;
-    c.mesh = m;
+function createEnemy(x,z){
+  const c={mesh:null,health:50};
+  BABYLON.SceneLoader.ImportMeshAsync(null,"","bat.glb",scene).then(r=>{
+    const m=r.meshes[0];
+    m.position=new BABYLON.Vector3(x,1.8,z);
+    m.scaling=new BABYLON.Vector3(0.07,0.07,0.07);
+    m.checkCollisions=true;
+    c.mesh=m;
   });
   return c;
 }
 
-function createItem(x, z, type, mat){
-  const m = BABYLON.MeshBuilder.CreatePlane(type,{width:0.3, height:0.3}, scene);
-  m.billboardMode = BABYLON.Mesh.BILLBOARDMODE_ALL;
-  m.position = new BABYLON.Vector3(x,0.5,z);
-  m.material = mat;
-  const lt = new BABYLON.PointLight("", m.position, scene);
+function createItem(x,z,type,mat){
+  const m=BABYLON.MeshBuilder.CreatePlane(type,{width:0.3,height:0.3},scene);
+  m.billboardMode=BABYLON.Mesh.BILLBOARDMODE_ALL;
+  m.position=new BABYLON.Vector3(x,0.5,z);
+  m.material=mat;
+  const lt=new BABYLON.PointLight("",m.position,scene);
   items.push({x,z,type});
-  itemMeshes.push({mesh:m, light:lt, data:{x,z,type}});
+  itemMeshes.push({mesh:m,light:lt,data:{x,z,type}});
 }
 
 function checkItemCollisions(){
-  for(let i = itemMeshes.length-1; i>=0; i--){
-    const obj = itemMeshes[i];
-    const dist = BABYLON.Vector3.Distance(camera.position, obj.mesh.position);
-    if(dist < 1){
+  for(let i=itemMeshes.length-1;i>=0;i--){
+    const obj=itemMeshes[i];
+    const dist=BABYLON.Vector3.Distance(camera.position,obj.mesh.position);
+    if(dist<1){
       collectItem(obj.data);
-      items.splice(items.findIndex(it => it.x===obj.data.x && it.z===obj.data.z && it.type===obj.data.type),1);
-      obj.mesh.dispose();
-      obj.light.dispose();
-      itemMeshes.splice(i,1);
+      items.splice(items.findIndex(it=>it.x===obj.data.x&&it.z===obj.data.z&&it.type===obj.data.type),1);
+      obj.mesh.dispose(); obj.light.dispose(); itemMeshes.splice(i,1);
     }
   }
 }
 
 function collectItem(item){
-  if(item.type === "health"){
-    vidaJugador = Math.min(vidaJugador + 25, 100);
-    updateHealthBar();
-    showPickup("+25 Salud");
-  } else if(item.type === "key"){
-    hasKey = true;
-    portalActive = true;
-    portalMesh.material.emissiveColor = new BABYLON.Color3(0.8,0.2,1);
-    portalMesh.material.alpha = 0.8;
+  if(item.type==="health"){
+    vidaJugador=Math.min(vidaJugador+25,100);
+    updateHealthBar(); showPickup("+25 Salud");
+  } else if(item.type==="key"){
+    hasKey=true; portalActive=true;
+    portalMesh.material.emissiveColor=new BABYLON.Color3(0.8,0.2,1);
+    portalMesh.material.alpha=0.8;
     showPickup("Llave obtenida");
   }
 }
 
 function playerAttack(){
-  const flash = new BABYLON.PointLight("atk", camera.position.add(camera.getDirection(BABYLON.Axis.Z).scale(2)), scene);
-  flash.diffuse = new BABYLON.Color3(1,0.5,0);
-  flash.range = 10; flash.intensity = 1;
-  setTimeout(() => flash.dispose(), 100);
-  enemies.forEach(e => {
+  const flash=new BABYLON.PointLight("atk",camera.position.add(camera.getDirection(BABYLON.Axis.Z).scale(2)),scene);
+  flash.diffuse=new BABYLON.Color3(1,0.5,0);flash.range=10;flash.intensity=1;
+  setTimeout(()=>flash.dispose(),100);
+  enemies.forEach(e=>{
     if(e.mesh){
-      const dx = e.mesh.position.x - camera.position.x;
-      const dz = e.mesh.position.z - camera.position.z;
-      const dist = Math.sqrt(dx*dx + dz*dz);
-      if(dist <= config.attackRange){
-        e.health -= config.playerAttackDamage;
-        if(e.health <= 0){
-          e.mesh.dispose();
-        }
+      const dx=e.mesh.position.x-camera.position.x;
+      const dz=e.mesh.position.z-camera.position.z;
+      const dist=Math.hypot(dx,dz);
+      if(dist<=config.attackRange){
+        e.health-=config.playerAttackDamage;
+        if(e.health<=0) e.mesh.dispose();
       }
     }
   });
 }
 
 function castMagic(){
-  const magicFlash = new BABYLON.HemisphericLight("magicFlash", camera.position, scene);
-  magicFlash.diffuse = new BABYLON.Color3(0.2,0.4,1);
-  magicFlash.groundColor = new BABYLON.Color3(0.1,0.2,0.5);
-  magicFlash.intensity = 20;
-  setTimeout(() => magicFlash.dispose(), 200);
+  const magicFlash=new BABYLON.HemisphericLight("magicFlash",camera.position,scene);
+  magicFlash.diffuse=new BABYLON.Color3(0.2,0.4,1);
+  magicFlash.groundColor=new BABYLON.Color3(0.1,0.2,0.5);
+  magicFlash.intensity=20;
+  setTimeout(()=>magicFlash.dispose(),200);
+
+  enemies.forEach(e=>{
+    if(e.mesh){
+      const dx=e.mesh.position.x-camera.position.x;
+      const dz=e.mesh.position.z-camera.position.z;
+      const dist=Math.hypot(dx,dz);
+      if(dist<=config.attackRange*1.5){
+        e.health-=config.playerAttackDamage;
+        if(e.health<=0) e.mesh.dispose();
+      }
+    }
+  });
 }
 
 document.getElementById("btnAttack").onclick = playerAttack;
 document.getElementById("btnMagic").onclick = castMagic;
 
 engine.runRenderLoop(()=>{
-  const f = camera.getDirection(BABYLON.Axis.Z), r = camera.getDirection(BABYLON.Axis.X);
+  const f=camera.getDirection(BABYLON.Axis.Z), r=camera.getDirection(BABYLON.Axis.X);
   camera.cameraDirection = BABYLON.Vector3.Zero()
-    .addInPlace(f.scale(joyY * 0.1))
-    .addInPlace(r.scale(joyX * 0.1));
+    .addInPlace(f.scale(joyY*0.1))
+    .addInPlace(r.scale(joyX*0.1));
 
-  enemies.forEach(e => {
+  enemies.forEach(e=>{
     if(e.mesh){
-      const dir = camera.position.subtract(e.mesh.position), dist = dir.length();
-      if(dist < 30 && dist > 1){
+      const dir = camera.position.subtract(e.mesh.position), dist=dir.length();
+      if(dist<30 && dist>1){
         e.mesh.moveWithCollisions(dir.normalize().scale(0.06));
       }
     }
@@ -215,14 +201,15 @@ engine.runRenderLoop(()=>{
 
   if(portalMesh){
     portalMesh.rotation.y += 0.01;
-    if(portalActive && hasKey && BABYLON.Vector3.Distance(camera.position, portalMesh.position) < 1){
+    if(portalActive && hasKey && BABYLON.Vector3.Distance(camera.position,portalMesh.position)<1){
       window.location.href = "nivel2.html";
     }
   }
 
   scene.render();
 });
-window.addEventListener("resize", () => engine.resize());
+
+window.addEventListener("resize",()=>engine.resize());
 </script>
 </body>
 </html>
