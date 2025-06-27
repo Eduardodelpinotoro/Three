@@ -58,7 +58,7 @@ camera.maxStepHeight = 1;
 new BABYLON.HemisphericLight("light", new BABYLON.Vector3(0,1,0), scene);
 
 // Vida y HUD
-let vidaJugador = 100;
+let vidaJugador = 5;
 const barraVida = document.getElementById("healthBar");
 function actualizarVida(){
   barraVida.style.width = (vidaJugador * 20) + "%";
