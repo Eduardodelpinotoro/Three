@@ -1,39 +1,27 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-<meta charset="UTF-8" />
-<title>Juego con mapa.glb + enemigos/items/portal/llave</title>
-<style>
-  html, body { margin:0; width:100%; height:100%; overflow:hidden; background:#000; }
-  #renderCanvas { width:100%; height:100%; display:block; }
-  #joystick-container { position:absolute; bottom:30px; left:30px; width:150px; height:150px; z-index:10; }
-  #hud { position:absolute; top:0; left:0; right:0; bottom:0; pointer-events:none; z-index:20; }
-  #crosshair { position:absolute; width:3px; height:3px; background:red; border-radius:50%;
-               top:50%; left:50%; margin:-1.5px 0 0 -1.5px; }
-  .button { position:absolute; bottom:30px; width:60px; height:60px;
-            background:rgba(255,255,255,0.2); border-radius:50%; color:white;
-            font-size:24px; text-align:center; line-height:60px;
-            user-select:none; pointer-events:auto; }
-  #btnAttack { right:100px; }
-  #btnBow { right:180px; }
-  #hudOverlay { position:absolute; top:10px; left:10px; color:white; font-size:18px; }
-  #healthBarContainer { width:200px; height:20px; background:#444; border:1px solid #fff; margin-top:4px; }
-  #healthBar { height:100%; width:100%; background:#0f0; }
-</style>
+  <meta charset="UTF-8">
+  <title>Juego nivel 1</title>
+  <style>
+    html,body{margin:0;overflow:hidden;background:#000}
+    #renderCanvas{width:100%;height:100%}
+    #joystick-container{position:absolute;bottom:30px;left:30px;width:150px;height:150px;z-index:10}
+    .button{position:absolute;bottom:30px;width:60px;height:60px;background:rgba(255,255,255,0.2);border-radius:50%;pointer-events:auto;}
+    #btnAttack{right:100px}
+    #btnMagic{right:180px}
+    #healthBarContainer{position:absolute;top:10px;left:10px;width:200px;height:20px;background:#444;border:1px solid #fff}
+    #healthBar{height:100%;width:50%;background:#0f0;transition:width .3s}
+    #pickupMsg{position:absolute;top:45%;left:50%;transform:translate(-50%,-50%);color:#0ff;font-weight:bold;font-size:24px;opacity:0;pointer-events:none;transition:opacity .3s;}
+  </style>
 </head>
 <body>
-
 <canvas id="renderCanvas"></canvas>
 <div id="joystick-container"></div>
-<div id="hud">
-  <div id="crosshair"></div>
-  <div id="btnAttack" class="button">⚔</div>
-  <div id="btnBow" class="button">🎯</div>
-  <div id="hudOverlay">
-    Vida:
-    <div id="healthBarContainer"><div id="healthBar"></div></div>
-  </div>
-</div>
+<div id="healthBarContainer"><div id="healthBar"></div></div>
+<div id="pickupMsg"></div>
+<div class="button" id="btnAttack"></div>
+<div class="button" id="btnMagic"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/nipplejs@0.9.0/dist/nipplejs.min.js"></script>
 <script src="https://cdn.babylonjs.com/babylon.js"></script>
@@ -41,180 +29,164 @@
 
 <script>
 const canvas = document.getElementById("renderCanvas");
-const engine = new BABYLON.Engine(canvas, true);
+const engine = new BABYLON.Engine(canvas,true);
 const scene = new BABYLON.Scene(engine);
+scene.preventDefaultOnDoubleClick = false;
 scene.collisionsEnabled = true;
-scene.gravity = new BABYLON.Vector3(0, -9.81, 0);
+scene.gravity = new BABYLON.Vector3(0,-9.81,0);
 
-// Cámara
 const camera = new BABYLON.FreeCamera("cam", new BABYLON.Vector3(1,1,-5), scene);
-camera.attachControl(canvas, true);
+camera.attachControl(canvas,true);
+camera.inputs.attached.mousewheel?.detachControl(canvas);
 camera.checkCollisions = true;
 camera.applyGravity = true;
 camera.ellipsoid = new BABYLON.Vector3(1,1,1);
 camera.maxStepHeight = 1;
-
-// Luz
 new BABYLON.HemisphericLight("light", new BABYLON.Vector3(0,1,0), scene);
 
-// Vida y HUD
-let vidaJugador = 5;
-const barraVida = document.getElementById("healthBar");
-function actualizarVida(){
-  barraVida.style.width = (vidaJugador * 20) + "%";
-  if(vidaJugador <= 0){
-    alert("Has perdido");
-    location.reload();
-  }
+let vidaJugador=50;
+const healthBar=document.getElementById("healthBar");
+const pickupMsg=document.getElementById("pickupMsg");
+function updateHealth(){ healthBar.style.width=Math.min(vidaJugador,100)+"%"; if(vidaJugador<=0){alert("Has perdido");location.reload()} }
+updateHealth();
+function showPickup(txt){
+  pickupMsg.textContent = txt;
+  pickupMsg.style.opacity = 1;
+  setTimeout(() => pickupMsg.style.opacity = 0, 1000);
 }
-actualizarVida();
 
-// Joystick
-let joyX = 0, joyY = 0;
-const joystick = nipplejs.create({
-  zone: document.getElementById('joystick-container'),
-  mode: 'static', position: {left:'75px', bottom:'75px'},
-  size:120, color:'white'
-});
-joystick.on('move', (_, d) => { joyX = d.vector.x; joyY = d.vector.y; });
-joystick.on('end', () => { joyX = 0; joyY = 0; });
+let joyX=0,joyY=0;
+nipplejs.create({
+  zone:document.getElementById("joystick-container"),
+  mode:"static",position:{left:"75px",bottom:"75px"},size:120,color:"white"
+}).on("move",(_,d)=>{joyX=d.vector.x;joyY=d.vector.y}).on("end",()=>{joyX=0;joyY=0});
 
-// Disparo
-function crearBala(origen, dir){
-  const bala = BABYLON.MeshBuilder.CreateSphere("bala", {diameter:0.3}, scene);
-  bala.position = origen.clone();
-  const mat = new BABYLON.StandardMaterial("bMat", scene);
-  mat.emissiveColor = new BABYLON.Color3(0,1,0);
-  bala.material = mat;
-  bala._dir = dir.normalize().scale(4);
-  bala._obs = scene.onBeforeRenderObservable.add(() => {
-    bala.position.addInPlace(bala._dir);
-    if(bala.position.y < -10){
-      scene.onBeforeRenderObservable.remove(bala._obs);
-      bala.dispose();
-    }
+const config={attackRange:5,playerAttackDamage:20};
+const enemies=[], items=[], portalGroup={mesh:null}, portalActive=false, hasKey=false;
 
-    enemies.forEach((e, i) => {
-      if(e.mesh && BABYLON.Vector3.Distance(e.mesh.position, bala.position) < 1){
-        e.health -= 25;
-        if(e.health <= 0){
-          e.mesh.dispose();
-          enemies.splice(i,1);
-        }
-        scene.onBeforeRenderObservable.remove(bala._obs);
-        bala.dispose();
-      }
-    });
-  });
-  setTimeout(() => {
-    scene.onBeforeRenderObservable.remove(bala._obs);
-    bala.dispose();
-  }, 2000);
-}
-document.getElementById("btnBow").onclick = () => crearBala(camera.position.add(camera.getDirection(BABYLON.Axis.Z).scale(2)), camera.getDirection(BABYLON.Axis.Z));
-document.getElementById("btnAttack").onclick = () => {
-  const atk = BABYLON.MeshBuilder.CreateBox("atk", {size:1}, scene);
-  atk.position = camera.position.add(camera.getDirection(BABYLON.Axis.Z).scale(2));
-  setTimeout(()=> atk.dispose(), 200);
-};
-
-// Cargar mapa
-BABYLON.SceneLoader.Append("", "mapa.glb", scene, () => {
-  scene.meshes.forEach(m => { m.checkCollisions = true; });
-  camera.position = new BABYLON.Vector3(0,1,-5);
+BABYLON.SceneLoader.Append("", "mapa.glb",scene,()=>{
+  scene.meshes.forEach(m=>m.checkCollisions=true);
+  camera.position=new BABYLON.Vector3(1,1,-5);
   initEntities();
 });
 
-// Enemigos, ítems, portal
-const enemies = [], items = [], portal = {mesh:null, active:false}, key = {picked:false};
-
 function initEntities(){
-  // Enemigos
-  const dummy = [ {x:2,z:2}, {x:-3,z:1}, {x:5,z:-4} ];
-  dummy.forEach(e => enemies.push(createEnemy(e.x,e.z)));
-
-  // Ítems
-  const texHealth = new BABYLON.StandardMaterial("",scene);
-  texHealth.diffuseTexture = new BABYLON.Texture("https://i.ibb.co/Xr1rftKg/1b452991-913b-4dbe-8f25-43f7108d1d70.png", scene);
-  createItem(1,0,"health", texHealth);
-
-  const texKey = new BABYLON.StandardMaterial("",scene);
-  texKey.diffuseTexture = new BABYLON.Texture("https://i.ibb.co/HpKK2xwJ/1000012289-removebg-preview.png", scene);
-  createItem(-1,3,"key", texKey);
-
-  // Portal
-  portal.mesh = BABYLON.MeshBuilder.CreateCylinder("portal",{height:0.1,diameter:1.5},scene);
-  portal.mesh.position=new BABYLON.Vector3(4,0.05,4);
-  const pMat = new BABYLON.StandardMaterial("pMat",scene);
-  pMat.emissiveColor=new BABYLON.Color3(0.5,0,1); pMat.alpha=0.7;
-  portal.mesh.material=pMat;
+  [{x:2,z:2},{x:-3,z:1},{x:5,z:-4}].forEach(e=>enemies.push(createEnemy(e.x,e.z)));
+  createItem(1,0,"health","https://i.ibb.co/Xr1rftKg/1b452991-913b-4dbe-8f25-43f7108d1d70.png");
+  createItem(-1,3,"key","https://i.ibb.co/HpKK2xwJ/1000012289-removebg-preview.png");
+  portalGroup.mesh=BABYLON.MeshBuilder.CreateCylinder("portal",{height:0.1,diameter:1.5},scene);
+  portalGroup.mesh.position=new BABYLON.Vector3(4,0.05,4);
+  portalGroup.mesh.material=new BABYLON.StandardMaterial("",scene);
+  portalGroup.mesh.material.emissiveColor=new BABYLON.Color3(0.5,0,1);
+  portalGroup.mesh.material.alpha=0.7;
 }
 
 function createEnemy(x,z){
-  const container = {};
-  BABYLON.SceneLoader.ImportMesh("", "", "bat.glb", scene, (meshes) => {
-    const mesh = meshes[0];
-    mesh.position=new BABYLON.Vector3(x,1.8,z);
-    mesh.scaling=new BABYLON.Vector3(0.07,0.07,0.07);
-    mesh.checkCollisions=true;
-    container.mesh = mesh;
+  const obj={mesh:null,health:50};
+  BABYLON.SceneLoader.ImportMeshAsync(null,"","bat.glb",scene).then(res=>{
+    const m=res.meshes[0];
+    m.position=new BABYLON.Vector3(x,1.8,z);
+    m.scaling=new BABYLON.Vector3(0.07,0.07,0.07);
+    m.checkCollisions=true;
+    obj.mesh=m;
   });
-  container.health = 50;
-  return container;
+  return obj;
 }
 
-function createItem(x,z,type, mat){
-  const mesh = BABYLON.MeshBuilder.CreatePlane(type,{width:0.3,height:0.3},scene);
-  mesh.billboardMode = BABYLON.Mesh.BILLBOARDMODE_ALL;
-  mesh.position = new BABYLON.Vector3(x,0.5,z);
-  mesh.material = mat;
-  items.push({mesh,type,x,z});
+function createItem(x,z,type,img){
+  const mat=new BABYLON.StandardMaterial("",scene);
+  mat.diffuseTexture=new BABYLON.Texture(img,scene);
+  const m=BABYLON.MeshBuilder.CreatePlane(type,{width:0.3,height:0.3},scene);
+  m.billboardMode=BABYLON.Mesh.BILLBOARDMODE_ALL;
+  m.position=new BABYLON.Vector3(x,0.5,z);
+  m.material=mat;
+  items.push({mesh:m,type,x,z});
 }
 
-// Bucle del juego
-engine.runRenderLoop(() => {
-  const f = camera.getDirection(BABYLON.Axis.Z);
-  const r = camera.getDirection(BABYLON.Axis.X);
-  camera.cameraDirection = BABYLON.Vector3.Zero()
-    .addInPlace(f.scale(joyY * 0.1))
-    .addInPlace(r.scale(joyX * 0.1));
-  
-  enemies.forEach(e => {
-    if(e.mesh){
-      const dir = camera.position.subtract(e.mesh.position);
-      const dist = dir.length();
-      if(dist<30 && dist>1){
-        const move = dir.normalize().scale(0.06);
-        e.mesh.moveWithCollisions(move);
-      }
-      if(dist<=1){
-        vidaJugador -= 0.02;
-        actualizarVida();
-      }
-    }
-  });
-
-  items.forEach((it,i) => {
-    const d = BABYLON.Vector3.Distance(camera.position, it.mesh.position);
-    if(d<1){
-      if(it.type==="health") vidaJugador = Math.min(vidaJugador+1,5);
-      if(it.type==="key") portal.active=true;
-      actualizarVida();
+function scanItems(){
+  items.slice().forEach((it,i)=>{
+    if(it.mesh && BABYLON.Vector3.Distance(camera.position, it.mesh.position) < 1.2){
+      collectItem(it);
       it.mesh.dispose();
       items.splice(i,1);
     }
   });
+}
 
-  if(portal.mesh){
-    portal.mesh.rotation.y += 0.01;
-    if(portal.active && BABYLON.Vector3.Distance(camera.position, portal.mesh.position)<1){
-      alert("¡Nivel completado!");
-      portal.mesh.dispose();
+function collectItem(it){
+  if(it.type==="health"){
+    vidaJugador=Math.min(vidaJugador+25,100);
+    updateHealth();
+    showPickup("+25 salud");
+  } else if(it.type==="key"){
+    hasKey=true;
+    portalActive=true;
+    portalGroup.mesh.material.emissiveColor=new BABYLON.Color3(0.8,0.2,1);
+    portalGroup.mesh.material.alpha=0.8;
+    showPickup("Llave obtenida");
+  }
+}
+
+function playerAttack(){
+  const flash=new BABYLON.PointLight("atk",camera.position.add(camera.getDirection(BABYLON.Axis.Z).scale(2)),scene);
+  flash.diffuse=new BABYLON.Color3(1,0.5,0);flash.range=10;flash.intensity=1;
+  setTimeout(()=>flash.dispose(),100);
+  enemies.forEach(e=>{
+    if(e.mesh){
+      const dist= BABYLON.Vector3.Distance(e.mesh.position, camera.position);
+      if(dist<=config.attackRange){
+        e.health-=config.playerAttackDamage;
+        if(e.health<=0){ e.mesh.dispose(); e.mesh=null; }
+      }
+    }
+  });
+}
+
+function castMagic(){
+  const magic=new BABYLON.HemisphericLight("magicFlash",camera.position,scene);
+  magic.diffuse=new BABYLON.Color3(0.2,0.4,1);magic.groundColor=new BABYLON.Color3(0.1,0.2,0.5);magic.intensity=20;
+  setTimeout(()=>magic.dispose(),200);
+  enemies.forEach(e=>{
+    if(e.mesh){
+      const dist=BABYLON.Vector3.Distance(e.mesh.position,camera.position);
+      if(dist<=config.attackRange*1.5){
+        e.health-=config.playerAttackDamage;
+        if(e.health<=0){ e.mesh.dispose(); e.mesh=null; }
+      }
+    }
+  });
+}
+
+document.getElementById("btnAttack").onclick=playerAttack;
+document.getElementById("btnMagic").onclick=castMagic;
+
+engine.runRenderLoop(()=>{
+  const f=camera.getDirection(BABYLON.Axis.Z), r=camera.getDirection(BABYLON.Axis.X);
+  camera.cameraDirection=BABYLON.Vector3.Zero()
+    .addInPlace(f.scale(joyY*0.1))
+    .addInPlace(r.scale(joyX*0.1));
+
+  enemies.forEach(e=>{
+    if(e.mesh){
+      const dir=camera.position.subtract(e.mesh.position), d=dir.length();
+      if(d<30 && d>1){
+        e.mesh.moveWithCollisions(dir.normalize().scale(0.06));
+      }
+    }
+  });
+
+  scanItems();
+
+  if(portalGroup.mesh){
+    portalGroup.mesh.rotation.y+=0.01;
+    if(portalActive && hasKey && BABYLON.Vector3.Distance(camera.position, portalGroup.mesh.position)<1){
+      window.location.href="nivel2.html";
     }
   }
 
   scene.render();
 });
+
 window.addEventListener("resize", ()=>engine.resize());
 </script>
 </body>
