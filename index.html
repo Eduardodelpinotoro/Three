@@ -142,22 +142,136 @@ function collectItem(item){
   }
 }
 
-function playerAttack(){
-  const flash=new BABYLON.PointLight("atk",camera.position.add(camera.getDirection(BABYLON.Axis.Z).scale(2)),scene);
-  flash.diffuse=new BABYLON.Color3(1,0.5,0);flash.range=10;flash.intensity=1;
-  setTimeout(()=>flash.dispose(),100);
-  enemies.forEach(e=>{
-    if(e.mesh){
-      const dx=e.mesh.position.x-camera.position.x;
-      const dz=e.mesh.position.z-camera.position.z;
-      const dist=Math.hypot(dx,dz);
-      if(dist<=config.attackRange){
-        e.health-=config.playerAttackDamage;
-        if(e.health<=0) e.mesh.dispose();
+function playerAttack() {
+      // Lanzar un rayo en dirección donde mira la cámara
+      const ray = new BABYLON.Ray(
+        camera.position, 
+        camera.getTarget().subtract(camera.position).normalize(), 
+        config.attackRange
+      );
+      
+      // Efecto visual - flash
+      const flash = new BABYLON.PointLight("attackFlash", 
+        camera.position.add(camera.getTarget().subtract(camera.position).normalize()), 
+        scene);
+      flash.diffuse = new BABYLON.Color3(1, 0.5, 0);
+      flash.range = 10;
+      flash.intensity = 1;
+      
+      setTimeout(() => flash.dispose(), 100);
+      
+      // Verificar impacto
+      let hitEnemy = false;
+      
+      for (let i = 0; i < gameState.enemies.length; i++) {
+        const enemy = gameState.enemies[i];
+        if (enemy.health <= 0) continue;
+        
+        const enemyMesh = enemyMeshes.find(e => e.data === enemy)?.mesh;
+        if (!enemyMesh) continue;
+        
+        // Distancia al enemigo
+        const dx = enemy.x - camera.position.x;
+        const dz = enemy.y - camera.position.z;
+        const dist = Math.sqrt(dx * dx + dz * dz);
+        
+        // Si está en rango
+        if (dist <= config.attackRange) {
+          // Calcular ángulo respecto a donde mira la cámara
+          const enemyDir = new BABYLON.Vector3(dx, 0, dz).normalize();
+          const cameraDirXZ = new BABYLON.Vector3(
+            Math.sin(camera.rotation.y), 
+            0, 
+            Math.cos(camera.rotation.y)
+          );
+          
+          const angle = BABYLON.Vector3.Dot(enemyDir, cameraDirXZ);
+          
+          // Si está delante y en un cono de visión
+          if (angle > Math.cos(config.attackAngle)) {
+            // Calcular daño
+            let damage = config.playerAttackDamage;
+            if (gameState.player.buffs.strength.active) {
+              damage *= (1 + gameState.player.buffs.strength.value);
+            }
+            
+            enemy.health -= damage;
+            hitEnemy = true;
+            
+            // Efecto de impacto
+            const impactPoint = new BABYLON.Vector3(enemy.x, 1, enemy.y);
+            const impactParticles = new BABYLON.ParticleSystem("impactParticles", 50, scene);
+            impactParticles.particleTexture = new BABYLON.Texture("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=", scene);
+            impactParticles.emitter = impactPoint;
+            impactParticles.color1 = new BABYLON.Color4(1, 0, 0, 1);
+            impactParticles.color2 = new BABYLON.Color4(0.5, 0, 0, 1);
+            impactParticles.minSize = 0.05;
+            impactParticles.maxSize = 0.2;
+            impactParticles.minLifeTime = 0.2;
+            impactParticles.maxLifeTime = 0.6;
+            impactParticles.emitRate = 300;
+            impactParticles.minEmitPower = 1;
+            impactParticles.maxEmitPower = 3;
+            impactParticles.updateSpeed = 0.02;
+            impactParticles.start();
+            
+            setTimeout(() => {
+              impactParticles.stop();
+              setTimeout(() => impactParticles.dispose(), 1000);
+            }, 200);
+            
+            // Eliminar enemigo si muere
+            if (enemy.health <= 0) {
+              showPickupMessage("¡Enemigo eliminado!", "#f00");
+              
+              // Animación de muerte
+              const duration = 30;
+              const shrinkAnimation = new BABYLON.Animation(
+                "enemyShrinkAnimation", "scaling", 30,
+                BABYLON.Animation.ANIMATIONTYPE_VECTOR3,
+                BABYLON.Animation.ANIMATIONLOOPMODE_CONSTANT
+              );
+              
+              const sinkAnimation = new BABYLON.Animation(
+                "enemySinkAnimation", "position.y", 30,
+                BABYLON.Animation.ANIMATIONTYPE_FLOAT,
+                BABYLON.Animation.ANIMATIONLOOPMODE_CONSTANT
+              );
+              
+              // Keyframes de encogimiento
+              const scaleKeys = [
+                { frame: 0, value: enemyMesh.scaling.clone() },
+                { frame: duration, value: new BABYLON.Vector3(0.1, 0.1, 0.1) }
+              ];
+              
+              // Keyframes de hundimiento
+              const positionKeys = [
+                { frame: 0, value: enemyMesh.position.y },
+                { frame: duration, value: -1 }
+              ];
+              
+              shrinkAnimation.setKeys(scaleKeys);
+              sinkAnimation.setKeys(positionKeys);
+              
+              enemyMesh.animations = [shrinkAnimation, sinkAnimation];
+              const animatable = scene.beginAnimation(enemyMesh, 0, duration, false);
+              
+              // Eliminar enemigo cuando termine la animación
+              animatable.onAnimationEnd = function() {
+                const index = enemyMeshes.findIndex(e => e.data === enemy);
+                if (index !== -1) {
+                  enemyMeshes[index].mesh.dispose();
+                  enemyMeshes.splice(index, 1);
+                }
+              };
+            }
+          }
+        }
       }
+      
+      return hitEnemy;
     }
-  });
-}
+
 
 function castMagic(){
   const magicFlash=new BABYLON.HemisphericLight("magicFlash",camera.position,scene);
