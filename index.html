@@ -235,42 +235,23 @@ function playerAttack() {
               const sinkAnimation = new BABYLON.Animation(
                 "enemySinkAnimation", "position.y", 30,
                 BABYLON.Animation.ANIMATIONTYPE_FLOAT,
-                BABYLON.Animation.ANIMATIONLOOPMODE_CONSTANT
-              );
-              
-              // Keyframes de encogimiento
-              const scaleKeys = [
-                { frame: 0, value: enemyMesh.scaling.clone() },
-                { frame: duration, value: new BABYLON.Vector3(0.1, 0.1, 0.1) }
-              ];
-              
-              // Keyframes de hundimiento
-              const positionKeys = [
-                { frame: 0, value: enemyMesh.position.y },
-                { frame: duration, value: -1 }
-              ];
-              
-              shrinkAnimation.setKeys(scaleKeys);
-              sinkAnimation.setKeys(positionKeys);
-              
-              enemyMesh.animations = [shrinkAnimation, sinkAnimation];
-              const animatable = scene.beginAnimation(enemyMesh, 0, duration, false);
-              
-              // Eliminar enemigo cuando termine la animación
-              animatable.onAnimationEnd = function() {
-                const index = enemyMeshes.findIndex(e => e.data === enemy);
-                if (index !== -1) {
-                  enemyMeshes[index].mesh.dispose();
-                  enemyMeshes.splice(index, 1);
-                }
-              };
-            }
-          }
-        }
+function playerAttack(){
+  const flash=new BABYLON.PointLight("atk",camera.position.add(camera.getDirection(BABYLON.Axis.Z).scale(2)),scene);
+  flash.diffuse=new BABYLON.Color3(1,0.5,0);flash.range=10;flash.intensity=1;
+  setTimeout(()=>flash.dispose(),100);
+  enemies.forEach(e=>{
+    if(e.mesh){
+      const dx=e.mesh.position.x-camera.position.x;
+      const dz=e.mesh.position.z-camera.position.z;
+      const dist=Math.hypot(dx,dz);
+      if(dist<=config.attackRange){
+        e.health-=config.playerAttackDamage;
+        if(e.health<=0) e.mesh.dispose();
       }
-      
-      return hitEnemy;
     }
+  });
+}
+                
 
 
 function castMagic(){
