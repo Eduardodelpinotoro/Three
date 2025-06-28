@@ -254,6 +254,7 @@ function collectItem(item){
 
 function activatePortal() {
   portalActive = true;
+  portalMesh.position.y = 1;
   const portalMaterial = new BABYLON.StandardMaterial("activePortalMaterial", scene);
   portalMaterial.emissiveColor = new BABYLON.Color3(0.8, 0.2, 1);
   portalMaterial.alpha = 0.8;
