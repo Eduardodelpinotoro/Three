@@ -473,26 +473,24 @@ engine.runRenderLoop(()=>{
 
   checkItemCollisions();
 
-  // Verificar colisión con el portal
-  if(portalMesh && portalActive && hasKey){
-    const distanceToPortal = BABYLON.Vector3.Distance(camera.position, portalMesh.position);
-    if(distanceToPortal < 1.5){
-      // Verificar si hay enemigos cerca del portal
-      const enemiesNearby = enemies.some(enemy => {
-        if(!enemy.mesh || enemy.health <= 0) return false;
-        const distance = BABYLON.Vector3.Distance(enemy.mesh.position, portalMesh.position);
-        return distance < 5;
-      });
-      
-      if(enemiesNearby){
-        showPickup('¡Elimina a los enemigos cercanos primero!', '#f00');
-      } else {
-        showPickup('¡Nivel completado!', '#0ff');
-        setTimeout(() => {
-          window.location.href = "nivel2.html";
-        }, 1500);
-      }
+  if(portalMesh && portalActive && hasKey && BABYLON.Vector3.Distance(camera.position,portalMesh.position)<1.5){
+    const enemiesNearby = enemies.some(enemy => {
+      if (!enemy.mesh || enemy.health <= 0) return false;
+      const dx = enemy.mesh.position.x - portalMesh.position.x;
+      const dz = enemy.mesh.position.z - portalMesh.position.z;
+      return Math.sqrt(dx * dx + dz * dz) < 5;
+    });
+    
+    if (enemiesNearby) {
+      showPickup('¡Elimina a los enemigos cercanos primero!', '#f00');
+      return;
     }
+    
+    showPickup(`¡Nivel completado!`, '#0ff');
+    
+    setTimeout(() => {
+      window.location.href = "nivel2.html";
+    }, 1500);
   }
 
   scene.render();
