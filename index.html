@@ -183,21 +183,15 @@ function checkItemCollisions(){
 
     const obj=itemMeshes[i];
 
-    // Use the mesh's current position for distance calculation to ensure it's accurate if the item moves
     const dist=BABYLON.Vector3.Distance(camera.position,obj.mesh.position);
 
     if(dist<1){
 
       collectItem(obj.data);
 
-      // Remove the item from the items array
       items.splice(items.findIndex(it=>it.x===obj.data.x&&it.z===obj.data.z&&it.type===obj.data.type),1);
 
-      // Dispose of the mesh and light
-      obj.mesh.dispose(); 
-      obj.light.dispose(); 
-      // Remove the item from itemMeshes array
-      itemMeshes.splice(i,1);
+      obj.mesh.dispose(); obj.light.dispose(); itemMeshes.splice(i,1);
 
     }
 
@@ -208,14 +202,13 @@ function collectItem(item){
 
   if(item.type==="health"){
 
-    vidaJugador=Math.min(vidaJugador+25,100); // Add 25 health, cap at 100
-    updateHealthBar(); 
-    showPickup("+25 Salud");
+    vidaJugador=Math.min(vidaJugador+25,100);
+
+    updateHealthBar(); showPickup("+25 Salud");
 
   } else if(item.type==="key"){
 
-    hasKey=true; 
-    portalActive=true; // The portal becomes active when the key is collected
+    hasKey=true; portalActive=true;
 
     portalMesh.material.emissiveColor=new BABYLON.Color3(0.8,0.2,1);
 
@@ -226,26 +219,44 @@ function collectItem(item){
   }
 
 }
-
-// Fixed playerAttack function
 function playerAttack() {
-    const ray = new BABYLON.Ray(
-        camera.position, 
-        camera.getTarget().subtract(camera.position).normalize(), 
-        config.attackRange
-    );
-    
-    const flash = new BABYLON.PointLight("attackFlash", 
-        camera.position.add(camera.getTarget().subtract(camera.position).normalize()), 
-        scene);
-    flash.diffuse = new BABYLON.Color3(1, 0.5, 0);
-    flash.range = 10;
-    flash.intensity = 1;
-    
-    setTimeout(() => flash.dispose(), 100);
-    
-    let hitEnemy = false;
-    
+
+      // Lanzar un rayo en dirección donde mira la cámara
+
+      const ray = new BABYLON.Ray(
+
+        camera.position, 
+
+        camera.getTarget().subtract(camera.position).normalize(), 
+
+        config.attackRange
+
+      );
+
+      
+
+      // Efecto visual - flash
+
+      const flash = new BABYLON.PointLight("attackFlash", 
+
+        camera.position.add(camera.getTarget().subtract(camera.position).normalize()), 
+
+        scene);
+
+      flash.diffuse = new BABYLON.Color3(1, 0.5, 0);
+
+      flash.range = 10;
+
+      flash.intensity = 1;
+
+      
+      setTimeout(() => flash.dispose(), 100);
+
+      
+      // Verificar impacto
+      let hitEnemy = false;
+
+      
     enemies.forEach(enemy => {
         if (enemy.mesh && enemy.health > 0) {
             const pickResult = scene.pickWithRay(ray, (mesh) => mesh === enemy.mesh);
@@ -320,7 +331,6 @@ function playerAttack() {
     
     return hitEnemy;
 }
-
 function castMagic(){
 
   const magicFlash=new BABYLON.HemisphericLight("magicFlash",camera.position,scene);
@@ -348,7 +358,6 @@ function castMagic(){
 
         if(e.health<=0) {
             e.mesh.dispose();
-            // Remove the enemy from the enemies array
             const index = enemies.indexOf(e);
             if (index > -1) {
                 enemies.splice(index, 1);
