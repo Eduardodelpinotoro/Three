@@ -47,13 +47,13 @@ scene.preventDefaultOnDoubleClick = false;
 scene.collisionsEnabled = true;
 scene.gravity = new BABYLON.Vector3(0,-9.81,0);
 
-const camera = new BABYLON.FreeCamera("cam", new BABYLON.Vector3(-1,1,-5), scene);
+const camera = new BABYLON.FreeCamera("cam", new BABYLON.Vector3(-10,2,-10), scene);
 camera.attachControl(canvas,true);
 camera.inputs.attached.mousewheel?.detachControl(canvas);
 camera.checkCollisions = true;
 camera.applyGravity = true;
-camera.ellipsoid = new BABYLON.Vector3(1,2,1);
-camera.maxStepHeight = 2;
+camera.ellipsoid = new BABYLON.Vector3(1,1,1);
+camera.maxStepHeight = 1;
 
 new BABYLON.HemisphericLight("light", new BABYLON.Vector3(0,1,0), scene);
 
