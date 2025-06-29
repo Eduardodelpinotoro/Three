@@ -38,7 +38,7 @@ const camera = new BABYLON.FreeCamera("cam", new BABYLON.Vector3(1,2.8,-5), scen
 camera.attachControl(canvas,true);
 camera.inputs.attached.mousewheel?.detachControl(canvas);
 camera.checkCollisions = true;
-camera.applyGravity = true;
+camera.applyGravity = false;
 camera.ellipsoid = new BABYLON.Vector3(1,1,1);
 camera.maxStepHeight = 1;
 
