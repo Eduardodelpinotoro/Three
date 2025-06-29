@@ -36,8 +36,6 @@ scene.gravity = new BABYLON.Vector3(0,-9.81,0);
 
 const camera = new BABYLON.FreeCamera("cam", new BABYLON.Vector3(1,1,-5), scene);
 camera.attachControl(canvas,true);
-  
-
 camera.inputs.attached.mousewheel?.detachControl(canvas);
 camera.checkCollisions = true;
 camera.applyGravity = true;
