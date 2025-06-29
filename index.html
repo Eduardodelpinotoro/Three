@@ -77,7 +77,7 @@ let portalMesh=null, portalActive=false, hasKey=false;
 // Carga del mapa
 BABYLON.SceneLoader.Append("", "mapa.glb", scene, ()=>{
   scene.meshes.forEach(m=>m.checkCollisions=true);
-  camera.position = new BABYLON.Vector3(1,1,-5);
+  camera.position = new BABYLON.Vector3(10,2,-5);
   initEntities();
 });
 
