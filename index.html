@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mundo Abierto con Luz Solar y Objetos 3D</title>
+<style>
+  html, body { margin:0; width:100%; height:100%; overflow:hidden; background:#000; font-family: 'Inter', sans-serif; }
+  #renderCanvas { width:100%; height:100%; display:block; }
+  #joystick { position:absolute; bottom:30px; left:30px; width:120px; height:120px;
+              background:rgba(255,255,255,0.15); border-radius:50%; touch-action:none; z-index:10;
+              display:flex; justify-content:center; align-items:center; box-shadow:0 4px 10px rgba(0,0,0,0.3); }
+  #stick { position:absolute; width:40px; height:40px; background:rgba(255,255,255,0.8);
+           border-radius:50%; transition:all 0.05s ease-out; box-shadow:inset 0 2px 5px rgba(0,0,0,0.2); }
+  #hud { position:absolute; top:0; left:0; right:0; bottom:0; pointer-events:none; z-index:20;
+         display:flex; flex-direction:column; justify-content:space-between; align-items:flex-start; padding:10px; }
+  #crosshair { position:absolute; width:3px; height:3px; background:red; border-radius:50%;
+               top:50%; left:50%; transform:translate(-50%, -50%); }
+  .button { position:absolute; bottom:30px; width:60px; height:60px;
+            background:rgba(255,255,255,0.2); border-radius:50%; color:white;
+            font-size:24px; text-align:center; line-height:60px;
+            user-select:none; pointer-events:auto; box-shadow:0 4px 10px rgba(0,0,0,0.3);
+            display:flex; justify-content:center; align-items:center; transition:background 0.2s ease, transform 0.1s ease; }
+  .button:active { background:rgba(255,255,255,0.4); transform:scale(0.95); }
+  #btnAttack { right:100px; }
+  #btnBow { right:180px; }
+  #btnToggleCamera { right:260px; }
+  #btnIsometricCamera { right:340px; }
+
+  #hudOverlay { color:white; font-size:18px; background:rgba(0,0,0,0.4); padding:10px 15px; border-radius:8px; box-shadow:0 2px 5px rgba(0,0,0,0.2); pointer-events:none; }
+  #healthBarContainer { width:200px; height:20px; background:#444; border:1px solid #fff; border-radius:5px; overflow:hidden; margin-top:4px; }
+  #healthBar { height:100%; width:100%; background:linear-gradient(to right, #0f0, #0a0); }
+
+  /* Responsive adjustments */
+  @media (max-width: 600px) {
+      #joystick { width: 100px; height: 100px; bottom: 20px; left: 20px; }
+      #stick { width: 30px; height: 30px; }
+      .button { width: 50px; height: 50px; font-size: 20px; line-height: 50px; bottom: 20px; }
+      #btnAttack { right: 80px; }
+      #btnBow { right: 140px; }
+      #btnToggleCamera { right: 200px; }
+      #btnIsometricCamera { right: 260px; }
+      #hudOverlay { font-size: 16px; padding: 8px 12px; }
+      #healthBarContainer { width: 150px; height: 18px; }
+  }
+</style>
+</head>
+<body>
+<canvas id="renderCanvas"></canvas>
+<div id="joystick"><div id="stick"></div></div>
+<div id="hud">
+  <div id="crosshair"></div>
+  <div id="btnAttack" class="button">⚔</div>
+  <div id="btnBow" class="button">🎯</div>
+  <div id="btnToggleCamera" class="button">👁️</div>
+  <div id="btnIsometricCamera" class="button">🗺️</div>
+  <div id="hudOverlay">
+    Vida:
+    <div id="healthBarContainer"><div id="healthBar"></div></div>
+  </div>
+</div>
+<script src="https://cdn.babylonjs.com/babylon.js"></script>
+<script src="https://cdn.babylonjs.com/materialsLibrary/babylonjs.materials.min.js"></script>
+<script>
+const canvas = document.getElementById("renderCanvas");
+const engine = new BABYLON.Engine(canvas, true);
+const scene = new BABYLON.Scene(engine);
+scene.collisionsEnabled = true;
+scene.gravity = new BABYLON.Vector3(0, -9.81, 0);
+
+// Skybox
+const skybox = BABYLON.MeshBuilder.CreateBox("skyBox", {size:1000.0}, scene);
+const skyboxMaterial = new BABYLON.StandardMaterial("skyBox", scene);
+skyboxMaterial.backFaceCulling = false;
+skyboxMaterial.reflectionTexture = new BABYLON.CubeTexture("https://assets.babylonjs.com/textures/skybox", scene);
+skyboxMaterial.reflectionTexture.coordinatesMode = BABYLON.Texture.SKYBOX_MODE;
+skyboxMaterial.diffuseColor = new BABYLON.Color3(0, 0, 0);
+skyboxMaterial.specularColor = new BABYLON.Color3(0, 0, 0);
+skyboxMaterial.disableLighting = true;
+skybox.material = skyboxMaterial;
+
+// Luz solar direccional (desde arriba hacia abajo)
+const sunLight = new BABYLON.DirectionalLight("sunLight", new BABYLON.Vector3(0, -1, 0), scene);
+sunLight.intensity = 1.2;
+sunLight.diffuse = new BABYLON.Color3(1, 0.98, 0.95); // Luz solar blanca cálida
+sunLight.specular = new BABYLON.Color3(1, 0.98, 0.95);
+
+// Suelo
+const ground = BABYLON.MeshBuilder.CreateGround("ground", {width:500, height:500}, scene);
+ground.checkCollisions = true;
+const groundMat = new BABYLON.StandardMaterial("gMat", scene);
+groundMat.diffuseTexture = new BABYLON.Texture("https://i.ibb.co/sd6Vt5Ck/IMG-0886.png", scene);
+groundMat.specularColor = new BABYLON.Color3(0, 0, 0); // Establece el color especular a negro
+ground.material = groundMat;
+
+// --- Carga de Modelos GLB ---
+// Cargar mapa.glb
+BABYLON.SceneLoader.ImportMesh(
+    "", // Importar todas las mallas
+    "", // Directorio base de los modelos (ajusta si tus archivos están en una subcarpeta)
+    "mapa.glb", // Nombre del archivo GLB
+    scene,
+    function (newMeshes) {
+        // newMeshes es un array de todas las mallas cargadas de mapa.glb
+        newMeshes.forEach(mesh => {
+            mesh.position.set(50, 0, 50); // Posición para el primer mapa
+            mesh.scaling.set(10, 10, 10); // Escala del primer mapa (ajústala según necesites)
+            mesh.checkCollisions = true; // Habilita colisiones para el objeto
+            console.log("mapa.glb cargado y posicionado.");
+        });
+    },
+    null, // Progreso de la carga (opcional)
+    function (scene, message, exception) {
+        console.error("Error al cargar mapa.glb:", message, exception);
+    }
+);
+
+// Cargar mapa2.glb
+BABYLON.SceneLoader.ImportMesh(
+    "", // Importar todas las mallas
+    "", // Directorio base de los modelos (ajusta si tus archivos están en una subcarpeta)
+    "mapa2.glb", // Nombre del archivo GLB
+    scene,
+    function (newMeshes) {
+        // newMeshes es un array de todas las mallas cargadas de mapa2.glb
+        newMeshes.forEach(mesh => {
+            mesh.position.set(-75, 0, -75); // Posición para el segundo mapa
+            mesh.scaling.set(12, 12, 12); // Escala del segundo mapa (ajústala según necesites)
+            mesh.checkCollisions = true; // Habilita colisiones para el objeto
+            console.log("mapa2.glb cargado y posicionado.");
+        });
+    },
+    null, // Progreso de la carga (opcional)
+    function (scene, message, exception) {
+        console.error("Error al cargar mapa2.glb:", message, exception);
+    }
+);
+
+
+// --- Configuración del jugador ---
+const player = BABYLON.MeshBuilder.CreateCapsule("player", { height: 3, radius: 0.5 }, scene);
+player.position.set(0, 5, 0);
+player.checkCollisions = true;
+player.applyGravity = true;
+player.ellipsoid = new BABYLON.Vector3(0.5, 1.5, 0.5);
+const playerMaterial = new BABYLON.StandardMaterial("playerMat", scene);
+playerMaterial.diffuseColor = new BABYLON.Color3(0.1, 0.6, 0.9);
+player.material = playerMaterial;
+player.visibility = 0;
+
+// --- Cámaras ---
+let camera;
+let currentCameraMode = "firstPerson";
+
+// Cámara en primera persona
+const firstPersonCamera = new BABYLON.FreeCamera("firstPersonCam", new BABYLON.Vector3(0, 0.8, 0), scene);
+firstPersonCamera.parent = player;
+firstPersonCamera.checkCollisions = true;
+firstPersonCamera.applyGravity = false;
+firstPersonCamera.ellipsoid = new BABYLON.Vector3(0.1, 0.1, 0.1);
+
+// Cámara en tercera persona (ArcRotateCamera)
+const thirdPersonCamera = new BABYLON.ArcRotateCamera("thirdPersonCam", Math.PI / 2, Math.PI / 2.5, 10, player.position, scene);
+thirdPersonCamera.lowerRadiusLimit = 5;
+thirdPersonCamera.upperRadiusLimit = 20;
+thirdPersonCamera.wheelPrecision = 50;
+
+// Cámara isométrica (OrthographicCamera)
+const isometricCamera = new BABYLON.FreeCamera("isometricCam", new BABYLON.Vector3(0, 0, 0), scene);
+isometricCamera.mode = BABYLON.Camera.ORTHOGRAPHIC_CAMERA;
+
+const aspectRatio = engine.getRenderingCanvas().width / engine.getRenderingCanvas().height;
+const orthoRadius = 25;
+isometricCamera.orthoLeft = -orthoRadius * aspectRatio;
+isometricCamera.orthoRight = orthoRadius * aspectRatio;
+isometricCamera.orthoBottom = -orthoRadius;
+isometricCamera.orthoTop = orthoRadius;
+
+isometricCamera.rotation.x = Math.PI / 3;
+isometricCamera.rotation.y = Math.PI / 4;
+
+// Inicialmente, usa la cámara en primera persona
+camera = firstPersonCamera;
+scene.activeCamera = camera;
+camera.attachControl(canvas, true); // Asegura que los controles estén adjuntos desde el inicio
+
+// Controles del joystick
+let joyX=0, joyY=0, dragging=false;
+const stick=document.getElementById("stick"), joystick=document.getElementById("joystick");
+function setStick(x,y){
+  const dx=x-60, dy=y-60, d=Math.hypot(dx,dy), max=40;
+  if(d>max){
+    const a=Math.atan2(dy,dx);
+    joyX=Math.cos(a); joyY=Math.sin(a);
+    stick.style.left=60+joyX*max-20+"px";
+    stick.style.top=60+joyY*max-20+"px";
+  } else {
+    joyX=dx/max; joyY=dy/max;
+    stick.style.left=x-20+"px"; stick.style.top=y-20+"px";
+  }
+}
+function resetStick(){ joyX=0; joyY=0; stick.style.left="40px"; stick.style.top="40px"; }
+joystick.addEventListener("pointerdown",e=>{dragging=true;setStick(e.offsetX,e.offsetY);});
+joystick.addEventListener("pointermove",e=>{if(dragging) setStick(e.offsetX,e.offsetY);});
+joystick.addEventListener("pointerup",resetStick);
+joystick.addEventListener("pointerleave",resetStick);
+
+// Barra de vida (no funcional)
+let vidaJugador=5;
+const barraVida=document.getElementById("healthBar");
+function actualizarVida(){
+  barraVida.style.width = vidaJugador*20 + "%";
+}
+actualizarVida();
+
+// Disparos
+function crearBala(origen,dir){
+  const bala = BABYLON.MeshBuilder.CreateSphere("bala",{diameter:0.3},scene);
+  bala.position=origen.clone();
+  const mat = new BABYLON.StandardMaterial("bMat",scene);
+  mat.emissiveColor = new BABYLON.Color3(0,1,0);
+  bala.material=mat;
+  bala._dir = dir.normalize().scale(4);
+  bala._obs = scene.onBeforeRenderObservable.add(()=>{
+    bala.position.addInPlace(bala._dir);
+    if(bala.position.length() > 500){
+      scene.onBeforeRenderObservable.remove(bala._obs);
+      bala.dispose();
+    }
+  });
+  setTimeout(()=>{
+    if(bala&&!bala.isDisposed()){
+      scene.onBeforeRenderObservable.remove(bala._obs);
+      bala.dispose();
+    }
+  },2000);
+}
+
+// Botones
+document.getElementById("btnBow").addEventListener("click",()=>{
+  crearBala(player.position.add(camera.getDirection(BABYLON.Axis.Z).scale(1)),
+            camera.getDirection(BABYLON.Axis.Z));
+});
+document.getElementById("btnAttack").addEventListener("click",()=>{
+  const atk = BABYLON.MeshBuilder.CreateBox("atk",{size:1},scene);
+  atk.position = player.position.add(camera.getDirection(BABYLON.Axis.Z).scale(1.5));
+  setTimeout(()=>atk.dispose(),200);
+});
+
+// Función para cambiar la cámara
+function switchCamera(mode) {
+    if (scene.activeCamera) {
+        scene.activeCamera.detachControl(canvas);
+    }
+
+    switch (mode) {
+        case "firstPerson":
+            camera = firstPersonCamera;
+            player.visibility = 0;
+            document.getElementById("crosshair").style.display = "block";
+            player.scaling = new BABYLON.Vector3(1, 1, 1);
+            camera.attachControl(canvas, true); // Asegura que los controles estén adjuntos
+            break;
+        case "thirdPerson":
+            camera = thirdPersonCamera;
+            player.visibility = 1;
+            document.getElementById("crosshair").style.display = "none";
+            player.scaling = new BABYLON.Vector3(1, 1, 1);
+            camera.attachControl(canvas, true); // Asegura que los controles estén adjuntos
+            break;
+        case "isometric":
+            camera = isometricCamera;
+            player.visibility = 1;
+            document.getElementById("crosshair").style.display = "none";
+            player.scaling = new BABYLON.Vector3(0.5, 0.5, 0.5);
+            // La cámara isométrica no necesita attachControl para su rotación
+            // ya que su perspectiva es fija y solo sigue al jugador.
+            break;
+    }
+    scene.activeCamera = camera;
+    currentCameraMode = mode;
+}
+
+// Botones para alternar cámaras
+document.getElementById("btnToggleCamera").addEventListener("click", () => {
+    if (currentCameraMode === "firstPerson") {
+        switchCamera("thirdPerson");
+    } else {
+        switchCamera("firstPerson");
+    }
+});
+
+document.getElementById("btnIsometricCamera").addEventListener("click", () => {
+    switchCamera("isometric");
+});
+
+// Bucle de renderizado
+engine.runRenderLoop(()=>{
+  const speed = 0.2;
+  const joystickX = joyX;
+  const joystickY = joyY;
+
+  let moveDirection = BABYLON.Vector3.Zero();
+
+  if (currentCameraMode === "isometric") {
+      const isoCamForward = isometricCamera.getDirection(BABYLON.Axis.Z).normalize();
+      const isoCamRight = isometricCamera.getDirection(BABYLON.Axis.X).normalize();
+
+      isoCamForward.y = 0;
+      isoCamRight.y = 0;
+      isoCamForward.normalize();
+      isoCamRight.normalize();
+
+      moveDirection = isoCamForward.scale(-joystickY * speed).add(isoCamRight.scale(joystickX * speed));
+
+      if (moveDirection.lengthSquared() > 1) {
+          moveDirection.normalize();
+      }
+
+      player.moveWithCollisions(moveDirection);
+
+      const offsetDistance = 30; // Distancia de la cámara al jugador
+      const targetPos = player.position;
+
+      const alpha = isometricCamera.rotation.y;
+      const beta = isometricCamera.rotation.x;
+
+      const camX = targetPos.x - offsetDistance * Math.sin(alpha) * Math.cos(beta);
+      const camY = targetPos.y + offsetDistance * Math.sin(beta);
+      const camZ = targetPos.z - offsetDistance * Math.cos(alpha) * Math.cos(beta);
+
+      isometricCamera.position.set(camX, camY, camZ);
+      isometricCamera.setTarget(targetPos);
+
+      if (moveDirection.lengthSquared() > 0.01) {
+          const targetAngle = Math.atan2(moveDirection.x, moveDirection.z);
+          player.rotation.y = BABYLON.Scalar.Lerp(player.rotation.y, targetAngle, 0.1);
+      }
+
+  } else {
+      const cameraForward = camera.getDirection(BABYLON.Axis.Z).normalize();
+      const cameraRight = camera.getDirection(BABYLON.Axis.X).normalize();
+
+      cameraForward.y = 0;
+      cameraRight.y = 0;
+      cameraForward.normalize();
+      cameraRight.normalize();
+
+      moveDirection = cameraForward.scale(-joystickY * speed).add(cameraRight.scale(joystickX * speed));
+      player.moveWithCollisions(moveDirection);
+
+      if (currentCameraMode === "thirdPerson") {
+          thirdPersonCamera.target = player.position;
+          const targetRotationY = camera.alpha + Math.PI / 2;
+          player.rotation.y = BABYLON.Scalar.Lerp(player.rotation.y, targetRotationY, 0.1);
+      }
+  }
+
+  scene.render();
+});
+
+// Manejar el cambio de tamaño del lienzo para la cámara ortográfica
+engine.onResizeObservable.add(() => {
+    if (isometricCamera.mode === BABYLON.Camera.ORTHOGRAPHIC_CAMERA) {
+        const aspectRatio = engine.getRenderingCanvas().width / engine.getRenderingCanvas().height;
+        const orthoRadius = 25;
+        isometricCamera.orthoLeft = -orthoRadius * aspectRatio;
+        isometricCamera.orthoRight = orthoRadius * aspectRatio;
+        isometricCamera.orthoBottom = -orthoRadius;
+        isometricCamera.orthoTop = orthoRadius;
+    }
+});
+
+window.addEventListener("resize",()=>engine.resize());
+
+switchCamera("firstPerson");
+</script>
+</body>
+</html>
