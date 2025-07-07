@@ -65,16 +65,20 @@
 const canvas = document.getElementById("renderCanvas");
 const engine = new BABYLON.Engine(canvas, true);
 
-// Declara las variables de la escena y la cámara fuera de createScene para que sean accesibles globalmente
+// Declara variables globales para la escena y las cámaras
 let scene;
 let camera;
 let firstPersonCamera;
 let thirdPersonCamera;
 let isometricCamera;
 let currentCameraMode = "firstPerson";
-let player; // Asegúrate de que el jugador también sea global
+let player; // El mesh del jugador
 
-// Función asíncrona para crear la escena y cargar los modelos
+// --- IMPORTANTE: Define la URL base de tu repositorio RAW en GitHub aquí ---
+// Esta es la URL RAW para tu repositorio 'Eduardodelpinotoro/Three'
+const GITHUB_RAW_BASE_URL = "https://raw.githubusercontent.com/Eduardodelpinotoro/Three/main/";
+
+// --- Función asíncrona principal para crear la escena ---
 const createScene = async () => {
     scene = new BABYLON.Scene(engine);
     scene.collisionsEnabled = true;
@@ -105,59 +109,57 @@ const createScene = async () => {
     groundMat.specularColor = new BABYLON.Color3(0, 0, 0); // Establece el color especular a negro
     ground.material = groundMat;
 
-    // --- Carga de Modelos GLB con ImportMeshAsync ---
+    // --- Carga de Modelos GLB usando ImportMeshAsync desde GitHub RAW ---
     try {
-        // Cargar mapa.glb
-        console.log("Intentando cargar mapa.glb...");
-        const mapaResult = await BABYLON.SceneLoader.ImportMeshAsync(null, "", "mapa.glb", scene);
-        mapaResult.meshes.forEach(mesh => {
-            mesh.position.set(50, 0, 50); // Posición para el primer mapa
-            mesh.scaling.set(10, 10, 10); // Escala del primer mapa (ajústala según necesites)
-            mesh.checkCollisions = true; // Habilita colisiones para el objeto
-        });
-        console.log("mapa.glb cargado y posicionado.");
+        console.log("Intentando cargar mapa.glb desde GitHub RAW...");
+        // Carga mapa.glb
+        const mapaResult = await BABYLON.SceneLoader.ImportMeshAsync(null, GITHUB_RAW_BASE_URL, "mapa.glb", scene);
+        const mapaMesh = mapaResult.meshes[0]; // Asume que el mapa es la primera malla o el padre
+        mapaMesh.name = "mapa_principal";
+        mapaMesh.position.set(50, 0, 50);
+        mapaMesh.scaling.set(10, 10, 10);
+        mapaMesh.checkCollisions = true;
+        console.log("mapa.glb cargado y posicionado.", mapaMesh);
 
-        // Cargar mapa2.glb
-        console.log("Intentando cargar mapa2.glb...");
-        const mapa2Result = await BABYLON.SceneLoader.ImportMeshAsync(null, "", "mapa2.glb", scene);
-        mapa2Result.meshes.forEach(mesh => {
-            mesh.position.set(-75, 0, -75); // Posición para el segundo mapa
-            mesh.scaling.set(12, 12, 12); // Escala del segundo mapa (ajústala según necesites)
-            mesh.checkCollisions = true; // Habilita colisiones para el objeto
-        });
-        console.log("mapa2.glb cargado y posicionado.");
+        console.log("Intentando cargar mapa2.glb desde GitHub RAW...");
+        // Carga mapa2.glb
+        const mapa2Result = await BABYLON.SceneLoader.ImportMeshAsync(null, GITHUB_RAW_BASE_URL, "mapa2.glb", scene);
+        const mapa2Mesh = mapa2Result.meshes[0]; // Asume que el mapa2 es la primera malla o el padre
+        mapa2Mesh.name = "mapa_secundario";
+        mapa2Mesh.position.set(-75, 0, -75);
+        mapa2Mesh.scaling.set(12, 12, 12);
+        mapa2Mesh.checkCollisions = true;
+        console.log("mapa2.glb cargado y posicionado.", mapa2Mesh);
 
     } catch (error) {
-        console.error("Error al cargar uno o ambos modelos GLB:", error);
-        // Puedes agregar aquí una lógica para mostrar un mensaje al usuario si la carga falla.
+        console.error("⛔️ ERROR al cargar uno o ambos modelos GLB desde GitHub RAW:", error.message || error);
+        console.error("Asegúrate de que la variable `GITHUB_RAW_BASE_URL` está correctamente configurada y los archivos existan en esa ubicación RAW.");
+        console.error("La URL RAW para tu repositorio es: https://raw.githubusercontent.com/Eduardodelpinotoro/Three/main/");
     }
 
     // --- Configuración del jugador ---
     player = BABYLON.MeshBuilder.CreateCapsule("player", { height: 3, radius: 0.5 }, scene);
-    player.position.set(0, 0, 0);
+    player.position.set(0, 5, 0);
     player.checkCollisions = true;
     player.applyGravity = true;
     player.ellipsoid = new BABYLON.Vector3(0.5, 1.5, 0.5);
     const playerMaterial = new BABYLON.StandardMaterial("playerMat", scene);
     playerMaterial.diffuseColor = new BABYLON.Color3(0.1, 0.6, 0.9);
     player.material = playerMaterial;
-    player.visibility = 0; // Oculta el mesh del jugador si usas primera persona
+    player.visibility = 0;
 
     // --- Cámaras ---
-    // Cámara en primera persona
     firstPersonCamera = new BABYLON.FreeCamera("firstPersonCam", new BABYLON.Vector3(0, 0.8, 0), scene);
     firstPersonCamera.parent = player;
     firstPersonCamera.checkCollisions = true;
     firstPersonCamera.applyGravity = false;
     firstPersonCamera.ellipsoid = new BABYLON.Vector3(0.1, 0.1, 0.1);
 
-    // Cámara en tercera persona (ArcRotateCamera)
     thirdPersonCamera = new BABYLON.ArcRotateCamera("thirdPersonCam", Math.PI / 2, Math.PI / 2.5, 10, player.position, scene);
     thirdPersonCamera.lowerRadiusLimit = 5;
     thirdPersonCamera.upperRadiusLimit = 20;
     thirdPersonCamera.wheelPrecision = 50;
 
-    // Cámara isométrica (OrthographicCamera)
     isometricCamera = new BABYLON.FreeCamera("isometricCam", new BABYLON.Vector3(0, 0, 0), scene);
     isometricCamera.mode = BABYLON.Camera.ORTHOGRAPHIC_CAMERA;
 
@@ -171,21 +173,18 @@ const createScene = async () => {
     isometricCamera.rotation.x = Math.PI / 3;
     isometricCamera.rotation.y = Math.PI / 4;
 
-    // Inicialmente, usa la cámara en primera persona
     camera = firstPersonCamera;
     scene.activeCamera = camera;
-    camera.attachControl(canvas, true); // Asegura que los controles estén adjuntos desde el inicio
+    camera.attachControl(canvas, true);
 
-    // Retorna la escena creada
     return scene;
 };
 
-// Llama a createScene y luego inicia el bucle de renderizado
-createScene().then(createdScene => {
-    // La escena ya está disponible globalmente, pero la usamos aquí para asegurar que todo esté cargado
-    // antes de iniciar el bucle de renderizado.
+// --- Configuración y Bucle de Renderizado ---
+createScene().then(sceneToRender => {
+    scene = sceneToRender;
 
-    // Controles del joystick (estas funciones ya estaban fuera y no necesitan await)
+    // Controles del joystick
     let joyX=0, joyY=0, dragging=false;
     const stick=document.getElementById("stick"), joystick=document.getElementById("joystick");
     function setStick(x,y){
@@ -206,7 +205,7 @@ createScene().then(createdScene => {
     joystick.addEventListener("pointerup",resetStick);
     joystick.addEventListener("pointerleave",resetStick);
 
-    // Barra de vida (no funcional)
+    // Barra de vida (no funcional, solo visual)
     let vidaJugador=5;
     const barraVida=document.getElementById("healthBar");
     function actualizarVida(){
@@ -230,17 +229,19 @@ createScene().then(createdScene => {
         }
       });
       setTimeout(()=>{
-        if(bala&&!bala.isDisposed()){
+        if(bala && !bala.isDisposed()){
           scene.onBeforeRenderObservable.remove(bala._obs);
           bala.dispose();
         }
       },2000);
     }
 
-    // Botones
+    // Botones de acción
     document.getElementById("btnBow").addEventListener("click",()=>{
-      crearBala(player.position.add(camera.getDirection(BABYLON.Axis.Z).scale(1)),
-                camera.getDirection(BABYLON.Axis.Z));
+      if (camera) {
+        crearBala(player.position.add(camera.getDirection(BABYLON.Axis.Z).scale(1)),
+                  camera.getDirection(BABYLON.Axis.Z));
+      }
     });
     document.getElementById("btnAttack").addEventListener("click",()=>{
       const atk = BABYLON.MeshBuilder.CreateBox("atk",{size:1},scene);
@@ -260,22 +261,20 @@ createScene().then(createdScene => {
                 player.visibility = 0;
                 document.getElementById("crosshair").style.display = "block";
                 player.scaling = new BABYLON.Vector3(1, 1, 1);
-                camera.attachControl(canvas, true); // Asegura que los controles estén adjuntos
+                camera.attachControl(canvas, true);
                 break;
             case "thirdPerson":
                 camera = thirdPersonCamera;
                 player.visibility = 1;
                 document.getElementById("crosshair").style.display = "none";
                 player.scaling = new BABYLON.Vector3(1, 1, 1);
-                camera.attachControl(canvas, true); // Asegura que los controles estén adjuntos
+                camera.attachControl(canvas, true);
                 break;
             case "isometric":
                 camera = isometricCamera;
                 player.visibility = 1;
                 document.getElementById("crosshair").style.display = "none";
                 player.scaling = new BABYLON.Vector3(0.5, 0.5, 0.5);
-                // La cámara isométrica no necesita attachControl para su rotación
-                // ya que su perspectiva es fija y solo sigue al jugador.
                 break;
         }
         scene.activeCamera = camera;
@@ -320,7 +319,7 @@ createScene().then(createdScene => {
 
           player.moveWithCollisions(moveDirection);
 
-          const offsetDistance = 30; // Distancia de la cámara al jugador
+          const offsetDistance = 30;
           const targetPos = player.position;
 
           const alpha = isometricCamera.rotation.y;
@@ -374,10 +373,10 @@ createScene().then(createdScene => {
 
     window.addEventListener("resize",()=>engine.resize());
 
-    // Asegúrate de que la cámara se inicialice correctamente después de que se cree la escena.
     switchCamera("firstPerson");
+
 }).catch(error => {
-    console.error("Fallo al crear la escena:", error);
+    console.error("⛔️ FATAL: No se pudo iniciar la escena o cargar los modelos. Revisa los errores anteriores.", error);
 });
 </script>
 </body>
